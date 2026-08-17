@@ -16,6 +16,9 @@ coverage/
 # logs
 *.log
 
+# local-only project notes and artifacts
+local/
+
 # terraform
 **/.terraform/
 *.tfstate
@@ -31,4 +34,3 @@ override.tf.json
 .DS_Store
 .idea/
 .vscode/
-
