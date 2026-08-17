@@ -18,6 +18,7 @@ coverage/
 
 # local-only project notes and artifacts
 local/
+docs/superpowers/
 
 # terraform
 **/.terraform/
