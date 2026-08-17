@@ -1,0 +1,34 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+.next/
+coverage/
+
+# env
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+
+# terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/
+
