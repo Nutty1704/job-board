@@ -31,6 +31,7 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+infra/bootstrap/backend.tf
 
 # editor / os
 .DS_Store
