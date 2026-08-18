@@ -18,6 +18,8 @@ coverage/
 
 # local-only project notes and artifacts
 local/
+docs/superpowers/
+.worktrees/
 
 # terraform
 **/.terraform/
@@ -29,6 +31,7 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+infra/bootstrap/backend.tf
 
 # editor / os
 .DS_Store

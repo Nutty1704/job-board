@@ -1,0 +1,35 @@
+steps:
+  - label: ":mag: Trunk check"
+    key: trunk-check
+    command: just trunk-check
+    timeout_in_minutes: 10
+
+  - label: ":terraform: Validate infrastructure"
+    key: terraform-validate
+    command: |
+      terraform -chdir=infra init -backend=false
+      just terraform-fmt-check
+      just terraform-validate
+    timeout_in_minutes: 10
+
+  - label: ":terraform: Plan"
+    key: terraform-plan
+    depends_on: terraform-validate
+    command: |
+      : "$${TF_STATE_BUCKET:?TF_STATE_BUCKET must be set in Buildkite.}"
+      : "$${TF_VAR_ingestion_lambda_s3_bucket:?TF_VAR_ingestion_lambda_s3_bucket must be set in Buildkite.}"
+      export TF_VAR_ingestion_lambda_s3_key="lambdas/ingestion/$${BUILDKITE_COMMIT}.zip"
+      just terraform-init
+      terraform -chdir=infra plan -out=tfplan
+      terraform -chdir=infra show -no-color tfplan > terraform-plan.txt
+    artifact_paths:
+      - infra/tfplan
+      - infra/terraform-plan.txt
+    plugins:
+      - aws-assume-role-with-web-identity#v1.2.0:
+          role-arn: $TERRAFORM_PLAN_ROLE_ARN
+          session-tags:
+            - organization_slug
+            - pipeline_slug
+            - build_branch
+    timeout_in_minutes: 10
