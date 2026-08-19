@@ -7,8 +7,7 @@ test-ingestion:
 
 # Package the Lambda handler for upload to the versioned artifact bucket.
 package-ingestion:
-    mkdir -p dist
-    zip -q -j dist/ingestion.zip apps/ingestion/job_ingestion.py
+    python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/ingestion.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); archive.write("apps/ingestion/job_ingestion.py", "job_ingestion.py"); archive.close()'
 
 # Run Trunk's configured linters and format checks.
 trunk-check:
