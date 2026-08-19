@@ -1,6 +1,15 @@
 default:
     @just --list
 
+# Run the dependency-free Lambda ingestion unit tests.
+test-ingestion:
+    python3 -m unittest discover -s apps/ingestion/tests -v
+
+# Package the Lambda handler for upload to the versioned artifact bucket.
+package-ingestion:
+    mkdir -p dist
+    zip -q -j dist/ingestion.zip apps/ingestion/job_ingestion.py
+
 # Run Trunk's configured linters and format checks.
 trunk-check:
     if [ -x local/bin/trunk ]; then local/bin/trunk check; else trunk check; fi

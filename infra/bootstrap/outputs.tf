@@ -22,3 +22,8 @@ output "terraform_apply_role_arn" {
   description = "Buildkite OIDC role for approved main-branch applies."
   value       = aws_iam_role.terraform_apply.arn
 }
+
+output "ci_s3_publisher_role_arn" {
+  description = "Buildkite OIDC role for publishing project artifacts to S3."
+  value       = aws_iam_role.ci_s3_publisher.arn
+}

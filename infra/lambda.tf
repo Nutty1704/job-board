@@ -25,6 +25,7 @@ resource "aws_lambda_function" "ingestion" {
       ADZUNA_COUNTRY          = var.adzuna_country
       ADZUNA_LOCATION         = var.adzuna_location
       ADZUNA_SEARCH_QUERY     = var.adzuna_search_query
+      ADZUNA_RESULTS_PER_PAGE = var.adzuna_results_per_page
       ADZUNA_SECRET_ARN       = aws_secretsmanager_secret.adzuna.arn
       JOBS_TO_SCORE_QUEUE_URL = aws_sqs_queue.jobs_to_score.url
     }
