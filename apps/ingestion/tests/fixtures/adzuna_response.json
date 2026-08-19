@@ -1,0 +1,21 @@
+{
+  "results": [
+    {
+      "id": "123456",
+      "redirect_url": "https://www.adzuna.com/details/123456",
+      "title": "Software Engineer",
+      "description": "Build useful things.",
+      "company": { "display_name": "Acme" },
+      "location": { "display_name": "Sydney NSW", "area": ["Sydney", "NSW"] },
+      "category": { "tag": "it-jobs", "label": "IT Jobs" },
+      "contract_type": "permanent",
+      "contract_time": "full_time",
+      "salary_min": 100000,
+      "salary_max": 130000,
+      "salary_is_predicted": "0",
+      "created": "2026-08-17T12:00:00Z",
+      "latitude": -33.8688,
+      "longitude": 151.2093
+    }
+  ]
+}

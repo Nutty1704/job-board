@@ -33,7 +33,7 @@ data "aws_iam_policy_document" "ingestion_lambda" {
   statement {
     sid       = "EnqueueJobsForScoring"
     effect    = "Allow"
-    actions   = ["sqs:SendMessage"]
+    actions   = ["sqs:SendMessage", "sqs:SendMessageBatch"]
     resources = [aws_sqs_queue.jobs_to_score.arn]
   }
 

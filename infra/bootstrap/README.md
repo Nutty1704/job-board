@@ -57,18 +57,25 @@ TF_STATE_BUCKET=<terraform_state_bucket_name>
 TF_VAR_ingestion_lambda_s3_bucket=<lambda_artifacts_bucket_name>
 TERRAFORM_PLAN_ROLE_ARN=<terraform_plan_role_arn>
 TERRAFORM_APPLY_ROLE_ARN=<terraform_apply_role_arn>
+CI_S3_PUBLISH_ROLE_ARN=<ci_s3_publisher_role_arn>
 ```
 
 The pipeline configuration supplies `TF_VAR_ingestion_lambda_s3_key` from the
 commit SHA for plans. It is safe for that object not to exist on feature
-branches because a plan does not deploy the Lambda. A main-branch deployment
-will upload that exact ZIP before applying Terraform.
+branches because a plan does not deploy the Lambda. On `main`, Buildkite adds
+an annotation after the plan: if `apps/ingestion/` changed, it stops for a
+manual publish approval, packages and uploads that exact ZIP, then stops again
+for a manual Terraform apply approval. If it did not change, Buildkite records
+that no Lambda artifact was published and shows only the apply approval. The
+upload's S3 object version is passed to the apply step, pinning deployment to
+the tested artifact.
 
 The initial apply role has AWS `AdministratorAccess` because this new account
 is dedicated to the project. Its trust policy is constrained to the named
 Buildkite organization, pipeline, `main` branch, and `terraform-apply` step.
-Replace the managed policy with a project-specific policy once the resource
-set stabilizes.
+The separate `ci_s3_publisher` role is used by `publish-ingestion`; it grants
+only `s3:PutObject` on the Lambda artifact bucket. Add future publishing steps
+to that role's OIDC trust deliberately rather than reusing the apply role.
 
 The bootstrap avoids cross-region replication, S3 access logging, S3 event
 notifications, and customer-managed KMS keys for this single-account personal

@@ -62,6 +62,17 @@ variable "adzuna_country" {
   default     = "au"
 }
 
+variable "adzuna_results_per_page" {
+  description = "Number of Adzuna results fetched from page one per invocation."
+  type        = number
+  default     = 50
+
+  validation {
+    condition     = var.adzuna_results_per_page >= 1 && var.adzuna_results_per_page <= 50
+    error_message = "adzuna_results_per_page must be between 1 and 50."
+  }
+}
+
 variable "ingestion_schedule_expression" {
   description = "Daily EventBridge Scheduler expression, interpreted in Australia/Sydney time."
   type        = string

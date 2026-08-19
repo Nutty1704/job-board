@@ -1,4 +1,62 @@
 # Apps
 
-Deployable applications and workers will be added here as the project develops.
+Deployable applications and workers live here.
 
+## Ingestion Lambda
+
+`ingestion/job_ingestion.py` is a dependency-free Python 3.12 Lambda handler
+for Adzuna. It reads its credentials from Secrets Manager, fetches page 1 of
+the configured Australian search, normalizes each result, and sends one
+message per job to `jobs-to-score`.
+
+Run the fixture-driven unit tests and produce the deployment ZIP from the
+repository root:
+
+```sh
+just test-ingestion
+just package-ingestion
+```
+
+The package command writes `dist/ingestion.zip`. It does not call Adzuna or
+AWS.
+
+### Queue message contract
+
+Messages are compact JSON with `schema_version: 1` and this shape (fields in
+`job`, `source_url`, and `raw` are omitted when unavailable):
+
+```json
+{
+  "schema_version": 1,
+  "source": "adzuna",
+  "source_job_id": "123456",
+  "source_url": "https://...",
+  "ingested_at": "2026-08-18T00:00:00Z",
+  "search": {
+    "country": "au",
+    "location": "Sydney",
+    "query": "software engineer",
+    "page": 1
+  },
+  "job": {
+    "title": "...",
+    "description": "...",
+    "company": { "display_name": "..." },
+    "location": { "display_name": "...", "area": ["..."] },
+    "category": { "tag": "...", "label": "..." },
+    "contract_type": "...",
+    "contract_time": "...",
+    "salary": { "min": 0, "max": 0, "currency": "AUD", "is_predicted": false },
+    "source_created_at": "...",
+    "latitude": 0,
+    "longitude": 0
+  },
+  "raw": {}
+}
+```
+
+The function sends up to ten messages per SQS request. A failed batch entry
+fails the invocation, so delivery is at least once: downstream consumers must
+deduplicate using `source` and `source_job_id`. To remain under SQS's 256 KB
+limit, an oversized `raw` object is removed and the normalized event is still
+published; an oversized normalized event fails the invocation.

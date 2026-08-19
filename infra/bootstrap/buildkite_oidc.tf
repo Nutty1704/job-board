@@ -112,3 +112,50 @@ resource "aws_iam_role_policy_attachment" "terraform_apply_administrator" {
   role       = aws_iam_role.terraform_apply.name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
+
+data "aws_iam_policy_document" "buildkite_ci_s3_publisher_assume_role" {
+  statement {
+    effect = "Allow"
+
+    actions = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.buildkite.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "agent.buildkite.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "agent.buildkite.com:sub"
+      values = [
+        "organization:${var.buildkite_organization_slug}:pipeline:${var.buildkite_pipeline_slug}:ref:refs/heads/main:commit:*:step:publish-ingestion",
+      ]
+    }
+  }
+}
+
+resource "aws_iam_role" "ci_s3_publisher" {
+  name               = "${local.name_prefix}-ci-s3-publisher"
+  assume_role_policy = data.aws_iam_policy_document.buildkite_ci_s3_publisher_assume_role.json
+}
+
+data "aws_iam_policy_document" "ci_s3_publisher" {
+  statement {
+    sid       = "PublishProjectArtifacts"
+    effect    = "Allow"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.lambda_artifacts.arn}/*"]
+  }
+}
+
+resource "aws_iam_role_policy" "ci_s3_publisher" {
+  name   = "${local.name_prefix}-ci-s3-publisher"
+  role   = aws_iam_role.ci_s3_publisher.id
+  policy = data.aws_iam_policy_document.ci_s3_publisher.json
+}

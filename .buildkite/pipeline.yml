@@ -4,8 +4,14 @@ steps:
     command: just trunk-check
     timeout_in_minutes: 10
 
+  - label: ":snake: Test ingestion"
+    key: ingestion-test
+    command: just test-ingestion
+    timeout_in_minutes: 10
+
   - label: ":terraform: Validate infrastructure"
     key: terraform-validate
+    depends_on: ingestion-test
     command: |
       terraform -chdir=infra init -backend=false
       just terraform-fmt-check
@@ -33,3 +39,9 @@ steps:
             - pipeline_slug
             - build_branch
     timeout_in_minutes: 10
+
+  - label: ":pipeline: Prepare deployment"
+    key: prepare-deployment
+    depends_on: terraform-plan
+    if: build.branch == "main"
+    command: bash scripts/buildkite-deployment-pipeline.sh
