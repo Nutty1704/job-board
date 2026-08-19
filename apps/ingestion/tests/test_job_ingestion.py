@@ -1,6 +1,11 @@
 import json
+import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -46,6 +51,36 @@ def valid_listing(**overrides):
 def fixture_listing():
     fixture_path = Path(__file__).parent / "fixtures" / "adzuna_response.json"
     return json.loads(fixture_path.read_text(encoding="utf-8"))["results"][0]
+
+
+class PackagingTests(unittest.TestCase):
+    def test_package_ingestion_does_not_require_zip_executable(self):
+        repository_root = Path(__file__).resolve().parents[3]
+        just = shutil.which("just")
+        mkdir = shutil.which("mkdir")
+        shell = shutil.which("sh")
+        self.assertIsNotNone(just)
+        self.assertIsNotNone(mkdir)
+        self.assertIsNotNone(shell)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            command_directory = Path(temporary_directory)
+            (command_directory / "python3").symlink_to(Path(sys.executable))
+            (command_directory / "mkdir").symlink_to(Path(mkdir))
+            (command_directory / "sh").symlink_to(Path(shell))
+            environment = os.environ | {"PATH": str(command_directory)}
+
+            result = subprocess.run(
+                [just, "package-ingestion"],
+                cwd=repository_root,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with zipfile.ZipFile(repository_root / "dist" / "ingestion.zip") as archive:
+            self.assertEqual(archive.namelist(), ["job_ingestion.py"])
 
 
 class ConfigAndRequestTests(unittest.TestCase):
