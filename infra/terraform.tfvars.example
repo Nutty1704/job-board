@@ -6,5 +6,9 @@ ingestion_lambda_s3_key    = "lambdas/ingestion.zip"
 # Set this after each uploaded artifact when the bucket has versioning enabled.
 # ingestion_lambda_s3_object_version = "replace-with-s3-version-id"
 
+matching_lambda_s3_bucket = "replace-with-artifact-bucket"
+matching_lambda_s3_key    = "lambdas/matching.zip"
+# matching_lambda_s3_object_version = "replace-with-s3-version-id"
+
 # Optional: SNS topic ARNs for CloudWatch alarms.
 # alarm_actions = ["arn:aws:sns:ap-southeast-2:123456789012:job-board-alerts"]

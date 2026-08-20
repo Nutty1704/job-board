@@ -60,3 +60,20 @@ fails the invocation, so delivery is at least once: downstream consumers must
 deduplicate using `source` and `source_job_id`. To remain under SQS's 256 KB
 limit, an oversized `raw` object is removed and the normalized event is still
 published; an oversized normalized event fails the invocation.
+
+## Matching Lambda
+
+`matching/job_matching.py` consumes `jobs-to-score`, records each source job
+once in DynamoDB, applies the profile's hard filters, and embeds the profile
+and eligible jobs with OpenAI `text-embedding-3-small`. Jobs with a score at
+or above the profile threshold are sent to `high-match-jobs`.
+
+```sh
+just test-matching
+just package-matching
+```
+
+The output ZIP is `dist/matching.zip`. The worker uses only the standard
+library and Lambda's `boto3`; tests use fakes and never contact AWS or OpenAI.
+The `high-match-jobs` consumer must tolerate duplicates: publishing happens
+after DynamoDB persistence and SQS delivery is at least once.
