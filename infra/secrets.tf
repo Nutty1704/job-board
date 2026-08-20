@@ -5,6 +5,7 @@ resource "aws_secretsmanager_secret" "adzuna" {
 }
 
 resource "aws_ssm_parameter" "openai" {
+  #checkov:skip=CKV_AWS_337: The AWS-managed SSM key avoids a customer-managed KMS key's recurring cost for this personal project.
   name        = "/${local.name_prefix}/openai"
   description = "OpenAI API key JSON for the matching Lambda; populate api_key outside Terraform."
   type        = "SecureString"

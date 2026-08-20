@@ -105,15 +105,22 @@ resource "aws_s3_bucket_lifecycle_configuration" "lambda_artifacts" {
   bucket = aws_s3_bucket.lambda_artifacts.id
 
   rule {
+    id     = "AbortIncompleteMultipartUploads"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  rule {
     id     = "ExpireLambdaArtifacts"
     status = "Enabled"
 
     filter {
       prefix = "lambdas/"
-    }
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 7
     }
 
     # CI publishes each artifact to a unique commit key. Lambda copies the ZIP

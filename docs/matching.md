@@ -7,8 +7,10 @@ without rescoring. Jobs rejected by hard filters are dropped without storage,
 so a later duplicate is evaluated again. Updating the profile affects only
 previously scored source job IDs.
 
-After Terraform applies, upload this JSON as `current.json` to the
-`matching_profile_bucket_name` output. The bucket is private and versioned.
+After Terraform applies, upload this JSON to `matching/current.json` in the
+`project_data_bucket_name` output. The project-data bucket is private and
+versioned; other project files use purpose-based prefixes such as `jobs/` and
+`resumes/`.
 
 ```json
 {
@@ -23,6 +25,45 @@ After Terraform applies, upload this JSON as `current.json` to the
   "qualified_score_threshold": 80
 }
 ```
+
+For example:
+
+```sh
+aws s3 cp matching-profile.json \
+  "s3://$(terraform -chdir=infra output -raw project_data_bucket_name)/matching/current.json"
+```
+
+## Migrating an existing profile bucket
+
+Before applying this change, inspect remote Terraform state:
+
+```sh
+terraform -chdir=infra state list | grep aws_s3_bucket.matching_profiles
+```
+
+No output means the previous random-suffix bucket was never deployed and a
+normal apply can create the exact `job-board-personal` bucket. If it is
+present, create the new bucket and its settings with targeted apply first,
+copy the existing `current.json` to `matching/current.json`, then run the
+normal apply to retire the old bucket:
+
+```sh
+terraform -chdir=infra apply \
+  -target=aws_s3_bucket.project_data \
+  -target=aws_s3_bucket_versioning.project_data \
+  -target=aws_s3_bucket_server_side_encryption_configuration.project_data \
+  -target=aws_s3_bucket_public_access_block.project_data \
+  -target=aws_s3_bucket_lifecycle_configuration.project_data
+
+OLD_PROFILE_BUCKET="$(terraform -chdir=infra state show -no-color aws_s3_bucket.matching_profiles | sed -n 's/^ *bucket *= *"\(.*\)"$/\1/p')"
+aws s3 cp "s3://${OLD_PROFILE_BUCKET}/current.json" \
+  "s3://job-board-personal/matching/current.json"
+
+terraform -chdir=infra apply
+```
+
+Terraform intentionally uses the exact name `job-board-personal`; if another
+AWS account owns it, the apply fails rather than selecting a suffixed name.
 
 The worker rejects jobs with no description, an unallowed location, an
 excluded phrase, no required skill, or explicit required/minimum/at-least

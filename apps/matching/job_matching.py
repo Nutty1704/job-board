@@ -38,7 +38,7 @@ class Config:
         defaults = {
             "JOB_MATCHES_TABLE": "job-matches",
             "MATCHING_PROFILE_BUCKET": "profiles",
-            "MATCHING_PROFILE_KEY": "current.json",
+            "MATCHING_PROFILE_KEY": "matching/current.json",
             "MATCHING_PROFILE_REGION": "ap-southeast-2",
             "OPENAI_PARAMETER_NAME": "openai",
             "HIGH_MATCH_JOBS_QUEUE_URL": "high-match-jobs",
