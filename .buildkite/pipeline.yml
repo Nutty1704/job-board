@@ -26,7 +26,7 @@ steps:
     timeout_in_minutes: 10
 
   - label: ":terraform: Plan"
-    key: terraform-plan
+    key: feature-terraform-plan
     depends_on: terraform-validate
     if: build.branch != "main"
     command: |
