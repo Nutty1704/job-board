@@ -34,7 +34,9 @@ steps:
       source scripts/configure-lambda-artifact-bucket.sh
       source scripts/configure-lambda-artifact-inputs.sh
       just terraform-init
-      terraform -chdir=infra plan -out=feature.tfplan
+      # Feature plans are never applied, so avoid taking a remote state lock
+      # that a cancelled CI job could leave behind.
+      terraform -chdir=infra plan -lock=false -out=feature.tfplan
       terraform -chdir=infra show -no-color feature.tfplan > feature-terraform-plan.txt
     artifact_paths:
       - infra/feature.tfplan

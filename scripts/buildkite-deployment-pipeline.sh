@@ -58,7 +58,7 @@ ${plan_dependencies}
       : "\$\${TF_STATE_BUCKET:?TF_STATE_BUCKET must be set in Buildkite.}"
       source scripts/configure-lambda-artifact-bucket.sh
 ${artifact_downloads}      just terraform-init
-      terraform -chdir=infra plan -out=deployment.tfplan
+      terraform -chdir=infra plan -lock-timeout=5m -out=deployment.tfplan
       terraform -chdir=infra show -no-color deployment.tfplan > deployment-terraform-plan.txt
     artifact_paths:
       - infra/deployment.tfplan
@@ -70,6 +70,8 @@ ${artifact_downloads}      just terraform-init
             - organization_slug
             - pipeline_slug
             - build_branch
+    concurrency_group: job-board-main-terraform
+    concurrency: 1
     timeout_in_minutes: 10
 
   - block: ":terraform: Apply"
@@ -85,7 +87,7 @@ ${artifact_downloads}      just terraform-init
       : "\$\${TF_STATE_BUCKET:?TF_STATE_BUCKET must be set in Buildkite.}"
 ${artifact_downloads}      buildkite-agent artifact download infra/deployment.tfplan .
       just terraform-init
-      terraform -chdir=infra apply -auto-approve deployment.tfplan
+      terraform -chdir=infra apply -lock-timeout=5m -auto-approve deployment.tfplan
     plugins:
       - aws-assume-role-with-web-identity#v1.2.0:
           role-arn: \$TERRAFORM_APPLY_ROLE_ARN
@@ -93,5 +95,7 @@ ${artifact_downloads}      buildkite-agent artifact download infra/deployment.tf
             - organization_slug
             - pipeline_slug
             - build_branch
+    concurrency_group: job-board-main-terraform
+    concurrency: 1
     timeout_in_minutes: 15
 YAML
