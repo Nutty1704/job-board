@@ -30,8 +30,7 @@ steps:
     depends_on: terraform-validate
     command: |
       : "$${TF_STATE_BUCKET:?TF_STATE_BUCKET must be set in Buildkite.}"
-      : "$${TF_VAR_ingestion_lambda_s3_bucket:?TF_VAR_ingestion_lambda_s3_bucket must be set in Buildkite.}"
-      : "$${TF_VAR_matching_lambda_s3_bucket:?TF_VAR_matching_lambda_s3_bucket must be set in Buildkite.}"
+      source scripts/configure-lambda-artifact-bucket.sh
       just terraform-init
       terraform -chdir=infra plan -out=tfplan
       terraform -chdir=infra show -no-color tfplan > terraform-plan.txt
