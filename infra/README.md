@@ -20,12 +20,12 @@ database-connected workers exist.
    `terraform_state_bucket_name` output, then run `just terraform-init`.
 3. Copy `terraform.tfvars.example` to an untracked `terraform.tfvars` and set
    the artifact bucket/key for local development.
-4. On `main`, Buildkite annotates whether `apps/ingestion/` changed. If it
-   did, approve the **Publish ingestion Lambda** block to package and upload a
-   commit-keyed ZIP to the versioned artifact bucket.
-5. Review the plan, then approve the Buildkite **Apply** block. When an
-   ingestion artifact was published, the apply step uses its exact S3 object
-   version; otherwise it applies only the infrastructure changes.
+4. On `main`, approve each Lambda publish block. Buildkite packages every
+   service, uploads `lambdas/<service>/latest.zip`, and writes an immutable
+   `lambdas/<service>/<commit>.zip` rollback copy.
+5. Review the resulting Terraform plan, then approve the Buildkite **Apply**
+   block. The plan and apply are pinned to the S3 version of `latest.zip` that
+   Buildkite uploaded for that commit.
 6. Populate the created Adzuna secret directly in AWS. Terraform deliberately
    creates no `aws_secretsmanager_secret_version`, so credentials cannot enter
    source control or Terraform state.
@@ -53,15 +53,16 @@ For a local deployment, upload and capture the object version before applying:
 
 ```sh
 ARTIFACT_BUCKET="$(terraform -chdir=infra/bootstrap output -raw lambda_artifacts_bucket_name)"
+aws s3api put-object --bucket "$ARTIFACT_BUCKET" --key "lambdas/ingestion/latest.zip" --body dist/ingestion.zip
 aws s3api put-object --bucket "$ARTIFACT_BUCKET" --key "lambdas/ingestion/$(git rev-parse HEAD).zip" --body dist/ingestion.zip
 ```
 
 Use the `VersionId` returned by `put-object` as
-`ingestion_lambda_s3_object_version` and the same key as
+`ingestion_lambda_s3_object_version` and `lambdas/ingestion/latest.zip` as
 `ingestion_lambda_s3_key` in the untracked `infra/terraform.tfvars`. This
 keeps Terraform deployments pinned to the exact ZIP that was tested.
 
 Buildkite uses a dedicated `ci_s3_publisher` role for the manually approved
-artifact upload. It can only put objects in the Lambda artifact bucket; the
+artifact uploads. It can only put objects in the Lambda artifact bucket; the
 administrator-scoped Terraform apply role remains limited to the manually
 approved apply step.
