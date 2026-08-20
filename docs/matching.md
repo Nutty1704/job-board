@@ -12,6 +12,11 @@ After Terraform applies, upload this JSON to `matching/current.json` in the
 versioned; other project files use purpose-based prefixes such as `jobs/` and
 `resumes/`.
 
+This prerequisite deployment does not yet connect the matching Lambda to SQS.
+Upload the profile and populate the OpenAI parameter before applying the
+follow-up consumer deployment; that later deployment starts processing the
+messages already waiting in `jobs-to-score`.
+
 ```json
 {
   "version": "2026-08-20",
