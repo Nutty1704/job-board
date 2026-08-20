@@ -84,7 +84,7 @@ data "aws_iam_policy_document" "matching_lambda" {
     sid       = "ReadMatchingProfile"
     effect    = "Allow"
     actions   = ["s3:GetObject", "s3:GetObjectVersion"]
-    resources = ["${aws_s3_bucket.matching_profiles.arn}/current.json"]
+    resources = ["${aws_s3_bucket.project_data.arn}/matching/current.json"]
   }
   statement {
     sid       = "ReadAndWriteJobMatches"

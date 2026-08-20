@@ -23,9 +23,9 @@ output "matching_lambda_name" {
   value       = aws_lambda_function.matching.function_name
 }
 
-output "matching_profile_bucket_name" {
-  description = "Private versioned bucket containing profiles/current.json."
-  value       = aws_s3_bucket.matching_profiles.bucket
+output "project_data_bucket_name" {
+  description = "Private versioned project-data bucket; the matching profile is at matching/current.json."
+  value       = aws_s3_bucket.project_data.bucket
 }
 
 output "high_match_jobs_queue_url" {

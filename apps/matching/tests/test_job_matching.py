@@ -45,6 +45,11 @@ def event(**job_overrides):
 
 
 class ProfileAndMatchingTests(unittest.TestCase):
+    def test_default_profile_key_uses_project_data_prefix(self):
+        config = job_matching.Config.from_environment({})
+
+        self.assertEqual(config.profile_key, "matching/current.json")
+
     def test_parse_profile_reads_hard_filters(self):
         profile = job_matching.parse_profile(json.dumps(profile_data()).encode())
 

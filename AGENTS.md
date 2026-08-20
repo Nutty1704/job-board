@@ -52,3 +52,7 @@ or local runtime artifacts.
   has developer-only commands.
 - `docs/` contains architecture and decision records. Planning artifacts under
   `docs/superpowers/` are local and ignored.
+- Project data (jobs, profiles, resumes, and future user-facing files) belongs
+  in the project-data S3 bucket under purpose-based prefixes such as
+  `matching/`, `jobs/`, and `resumes/`. Terraform state and Lambda deployment
+  artifacts remain in their dedicated buckets.
