@@ -55,14 +55,16 @@ variables from `just bootstrap-output`:
 
 ```text
 TF_STATE_BUCKET=<terraform_state_bucket_name>
-TF_VAR_ingestion_lambda_s3_bucket=<lambda_artifacts_bucket_name>
+LAMBDA_ARTIFACTS_BUCKET=<lambda_artifacts_bucket_name>
 TERRAFORM_PLAN_ROLE_ARN=<terraform_plan_role_arn>
 TERRAFORM_APPLY_ROLE_ARN=<terraform_apply_role_arn>
 CI_S3_PUBLISH_ROLE_ARN=<ci_s3_publisher_role_arn>
 ```
 
-The pipeline configuration supplies `TF_VAR_ingestion_lambda_s3_key` from the
-commit SHA for plans. It is safe for that object not to exist on feature
+The pipeline maps `LAMBDA_ARTIFACTS_BUCKET` to each Lambda's Terraform bucket
+input, so all current and future Lambda ZIPs share one artifact bucket. It
+supplies each Lambda's S3 key from the commit SHA for plans. It is safe for an
+artifact object not to exist on feature
 branches because a plan does not deploy the Lambda. On `main`, Buildkite adds
 an annotation after the plan: if `apps/ingestion/` changed, it stops for a
 manual publish approval, packages and uploads that exact ZIP, then stops again

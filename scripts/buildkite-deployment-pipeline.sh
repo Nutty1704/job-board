@@ -43,6 +43,7 @@ for worker in ingestion matching; do
     key: publish-${worker}
     depends_on: publish-${worker}-approval
     command: |
+      source scripts/configure-lambda-artifact-bucket.sh
       : \"\\\$\\\${TF_VAR_${worker}_lambda_s3_bucket:?TF_VAR_${worker}_lambda_s3_bucket must be set in Buildkite.}\"
       just package-${worker}
       object_key=\"lambdas/${worker}/\\\$\\\${BUILDKITE_COMMIT}.zip\"
@@ -77,6 +78,7 @@ ${apply_dependencies}
     key: terraform-apply
     depends_on: terraform-apply-approval
     command: |
+      source scripts/configure-lambda-artifact-bucket.sh
       : "\$\${TF_STATE_BUCKET:?TF_STATE_BUCKET must be set in Buildkite.}"
 ${apply_downloads}      just terraform-init
       terraform -chdir=infra apply -auto-approve
