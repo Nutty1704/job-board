@@ -44,6 +44,34 @@ variable "ingestion_lambda_runtime" {
   default     = "python3.12"
 }
 
+variable "matching_lambda_s3_bucket" {
+  description = "S3 bucket containing the packaged matching Lambda ZIP."
+  type        = string
+}
+
+variable "matching_lambda_s3_key" {
+  description = "S3 object key for the packaged matching Lambda ZIP."
+  type        = string
+}
+
+variable "matching_lambda_s3_object_version" {
+  description = "Optional immutable S3 object version for the matching Lambda ZIP."
+  type        = string
+  default     = null
+}
+
+variable "matching_lambda_handler" {
+  description = "Python handler exposed by the matching Lambda package."
+  type        = string
+  default     = "job_matching.lambda_handler"
+}
+
+variable "matching_lambda_runtime" {
+  description = "Lambda runtime for the matching function."
+  type        = string
+  default     = "python3.12"
+}
+
 variable "adzuna_search_query" {
   description = "Initial Adzuna search query."
   type        = string

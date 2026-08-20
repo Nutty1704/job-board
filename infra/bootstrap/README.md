@@ -4,7 +4,8 @@ This stack creates the AWS foundations that must exist before Buildkite can run
 the application Terraform safely:
 
 - a versioned S3 bucket for Terraform state and S3 lock files;
-- a versioned private S3 bucket for immutable Lambda ZIPs;
+- a versioned private S3 bucket for immutable Lambda ZIPs, retained for 14
+  days before lifecycle expiry;
 - Buildkite's AWS OIDC provider;
 - a plan role for every branch and an apply role restricted to `main`.
 

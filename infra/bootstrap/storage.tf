@@ -105,17 +105,26 @@ resource "aws_s3_bucket_lifecycle_configuration" "lambda_artifacts" {
   bucket = aws_s3_bucket.lambda_artifacts.id
 
   rule {
-    id     = "RetainCurrentArtifacts"
+    id     = "ExpireLambdaArtifacts"
     status = "Enabled"
 
-    filter {}
+    filter {
+      prefix = "lambdas/"
+    }
 
     abort_incomplete_multipart_upload {
       days_after_initiation = 7
     }
 
+    # CI publishes each artifact to a unique commit key. Lambda copies the ZIP
+    # during deployment, so retaining it for 14 days provides a rollback window
+    # without accumulating artifacts indefinitely.
+    expiration {
+      days = 14
+    }
+
     noncurrent_version_expiration {
-      noncurrent_days = 30
+      noncurrent_days = 14
     }
   }
 }

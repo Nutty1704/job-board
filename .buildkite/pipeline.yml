@@ -9,9 +9,16 @@ steps:
     command: just test-ingestion
     timeout_in_minutes: 10
 
+  - label: ":snake: Test matching"
+    key: matching-test
+    command: just test-matching
+    timeout_in_minutes: 10
+
   - label: ":terraform: Validate infrastructure"
     key: terraform-validate
-    depends_on: ingestion-test
+    depends_on:
+      - ingestion-test
+      - matching-test
     command: |
       terraform -chdir=infra init -backend=false
       just terraform-fmt-check
@@ -24,7 +31,7 @@ steps:
     command: |
       : "$${TF_STATE_BUCKET:?TF_STATE_BUCKET must be set in Buildkite.}"
       : "$${TF_VAR_ingestion_lambda_s3_bucket:?TF_VAR_ingestion_lambda_s3_bucket must be set in Buildkite.}"
-      export TF_VAR_ingestion_lambda_s3_key="lambdas/ingestion/$${BUILDKITE_COMMIT}.zip"
+      : "$${TF_VAR_matching_lambda_s3_bucket:?TF_VAR_matching_lambda_s3_bucket must be set in Buildkite.}"
       just terraform-init
       terraform -chdir=infra plan -out=tfplan
       terraform -chdir=infra show -no-color tfplan > terraform-plan.txt
