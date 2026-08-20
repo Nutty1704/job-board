@@ -26,9 +26,9 @@ steps:
     timeout_in_minutes: 10
 
   - label: ":terraform: Plan"
-    key: feature-terraform-plan
+    key: terraform-plan
     depends_on: terraform-validate
-    if: build.branch != "main"
+    branches: "!main"
     command: |
       : "$${TF_STATE_BUCKET:?TF_STATE_BUCKET must be set in Buildkite.}"
       source scripts/configure-lambda-artifact-bucket.sh
@@ -53,5 +53,5 @@ steps:
   - label: ":pipeline: Prepare deployment"
     key: prepare-deployment
     depends_on: terraform-validate
-    if: build.branch == "main"
+    branches: main
     command: bash scripts/buildkite-deployment-pipeline.sh
