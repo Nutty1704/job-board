@@ -24,6 +24,7 @@ variable "ingestion_lambda_s3_bucket" {
 variable "ingestion_lambda_s3_key" {
   description = "S3 object key for the packaged ingestion Lambda ZIP."
   type        = string
+  default     = "lambdas/ingestion/latest.zip"
 }
 
 variable "ingestion_lambda_s3_object_version" {
@@ -52,6 +53,7 @@ variable "matching_lambda_s3_bucket" {
 variable "matching_lambda_s3_key" {
   description = "S3 object key for the packaged matching Lambda ZIP."
   type        = string
+  default     = "lambdas/matching/latest.zip"
 }
 
 variable "matching_lambda_s3_object_version" {

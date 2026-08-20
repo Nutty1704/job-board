@@ -115,25 +115,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "lambda_artifacts" {
     }
   }
 
-  rule {
-    id     = "ExpireLambdaArtifacts"
-    status = "Enabled"
-
-    filter {
-      prefix = "lambdas/"
-    }
-
-    # CI publishes each artifact to a unique commit key. Lambda copies the ZIP
-    # during deployment, so retaining it for 14 days provides a rollback window
-    # without accumulating artifacts indefinitely.
-    expiration {
-      days = 14
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = 14
-    }
-  }
 }
 
 data "aws_iam_policy_document" "lambda_artifacts_bucket" {
