@@ -5,9 +5,17 @@ default:
 test-ingestion:
     python3 -m unittest discover -s apps/ingestion/tests -v
 
+# Run the dependency-free Lambda matching unit tests.
+test-matching:
+    python3 -m unittest discover -s apps/matching/tests -v
+
 # Package the Lambda handler for upload to the versioned artifact bucket.
 package-ingestion:
     python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/ingestion.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); archive.write("apps/ingestion/job_ingestion.py", "job_ingestion.py"); archive.close()'
+
+# Package the matching Lambda handler for upload to the versioned artifact bucket.
+package-matching:
+    python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/matching.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); archive.write("apps/matching/job_matching.py", "job_matching.py"); archive.close()'
 
 # Run Trunk's configured linters and format checks.
 trunk-check:

@@ -135,6 +135,7 @@ data "aws_iam_policy_document" "buildkite_ci_s3_publisher_assume_role" {
       variable = "agent.buildkite.com:sub"
       values = [
         "organization:${var.buildkite_organization_slug}:pipeline:${var.buildkite_pipeline_slug}:ref:refs/heads/main:commit:*:step:publish-ingestion",
+        "organization:${var.buildkite_organization_slug}:pipeline:${var.buildkite_pipeline_slug}:ref:refs/heads/main:commit:*:step:publish-matching",
       ]
     }
   }

@@ -4,7 +4,8 @@ This stack creates the AWS foundations that must exist before Buildkite can run
 the application Terraform safely:
 
 - a versioned S3 bucket for Terraform state and S3 lock files;
-- a versioned private S3 bucket for immutable Lambda ZIPs;
+- a versioned private S3 bucket for Lambda ZIPs, with immutable commit-keyed
+  rollback copies;
 - Buildkite's AWS OIDC provider;
 - a plan role for every branch and an apply role restricted to `main`.
 
@@ -54,21 +55,20 @@ variables from `just bootstrap-output`:
 
 ```text
 TF_STATE_BUCKET=<terraform_state_bucket_name>
-TF_VAR_ingestion_lambda_s3_bucket=<lambda_artifacts_bucket_name>
+LAMBDA_ARTIFACTS_BUCKET=<lambda_artifacts_bucket_name>
 TERRAFORM_PLAN_ROLE_ARN=<terraform_plan_role_arn>
 TERRAFORM_APPLY_ROLE_ARN=<terraform_apply_role_arn>
 CI_S3_PUBLISH_ROLE_ARN=<ci_s3_publisher_role_arn>
 ```
 
-The pipeline configuration supplies `TF_VAR_ingestion_lambda_s3_key` from the
-commit SHA for plans. It is safe for that object not to exist on feature
-branches because a plan does not deploy the Lambda. On `main`, Buildkite adds
-an annotation after the plan: if `apps/ingestion/` changed, it stops for a
-manual publish approval, packages and uploads that exact ZIP, then stops again
-for a manual Terraform apply approval. If it did not change, Buildkite records
-that no Lambda artifact was published and shows only the apply approval. The
-upload's S3 object version is passed to the apply step, pinning deployment to
-the tested artifact.
+The pipeline maps `LAMBDA_ARTIFACTS_BUCKET` to each Lambda's Terraform bucket
+input, so all current and future Lambda ZIPs share one artifact bucket. Feature
+branches plan against `lambdas/<service>/latest.zip` and read its current S3
+version when it exists; they never upload artifacts or apply infrastructure.
+On `main`, Buildkite stops for a manual publish approval for each service,
+packages it, uploads both `latest.zip` and an immutable commit-keyed copy, then
+runs the deployment plan. The plan and apply are pinned to the newly uploaded
+`latest.zip` version after a final manual apply approval.
 
 The initial apply role has AWS `AdministratorAccess` because this new account
 is dedicated to the project. Its trust policy is constrained to the named

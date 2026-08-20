@@ -105,7 +105,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "lambda_artifacts" {
   bucket = aws_s3_bucket.lambda_artifacts.id
 
   rule {
-    id     = "RetainCurrentArtifacts"
+    id     = "AbortIncompleteMultipartUploads"
     status = "Enabled"
 
     filter {}
@@ -113,11 +113,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "lambda_artifacts" {
     abort_incomplete_multipart_upload {
       days_after_initiation = 7
     }
-
-    noncurrent_version_expiration {
-      noncurrent_days = 30
-    }
   }
+
 }
 
 data "aws_iam_policy_document" "lambda_artifacts_bucket" {
