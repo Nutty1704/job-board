@@ -26,6 +26,7 @@ data "aws_iam_policy_document" "buildkite_plan_assume_role" {
       variable = "agent.buildkite.com:sub"
       values = [
         "organization:${var.buildkite_organization_slug}:pipeline:${var.buildkite_pipeline_slug}:ref:refs/heads/*:commit:*:step:feature-terraform-plan",
+        "organization:${var.buildkite_organization_slug}:pipeline:${var.buildkite_pipeline_slug}:ref:refs/heads/main:commit:*:step:terraform-plan",
       ]
     }
   }
