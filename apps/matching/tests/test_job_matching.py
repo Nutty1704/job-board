@@ -205,9 +205,13 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(response, {"batchItemFailures": [{"itemIdentifier": "bad"}]})
 
     def test_handler_retries_message_when_high_match_publish_fails(self):
-        response = job_matching.process_sqs_batch(
-            {"Records": [{"messageId": "qualified", "body": json.dumps(event())}]},
-            job_matching.Matcher(job_matching.Config.from_environment({}), FakeS3(), FakeParameterStore(), FakeDynamo(), FailingSqs(), lambda *_: {"data": [{"embedding": [1]}, {"embedding": [1]}]}),
-        )
+        with self.assertLogs(job_matching.logger, level="ERROR") as logs:
+            response = job_matching.process_sqs_batch(
+                {"Records": [{"messageId": "qualified", "body": json.dumps(event())}]},
+                job_matching.Matcher(job_matching.Config.from_environment({}), FakeS3(), FakeParameterStore(), FakeDynamo(), FailingSqs(), lambda *_: {"data": [{"embedding": [1]}, {"embedding": [1]}]}),
+            )
 
         self.assertEqual(response, {"batchItemFailures": [{"itemIdentifier": "qualified"}]})
+        self.assertIn("qualified", logs.output[0])
+        self.assertIn("RuntimeError: queue unavailable", logs.output[0])
+        self.assertNotIn("Build Python services on AWS", logs.output[0])
