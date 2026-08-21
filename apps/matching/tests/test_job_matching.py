@@ -108,8 +108,10 @@ class ProfileAndMatchingTests(unittest.TestCase):
 class FakeDynamo:
     def __init__(self):
         self.items = {}
+        self.requests = []
 
     def put_item(self, **kwargs):
+        self.requests.append(kwargs)
         item = kwargs["Item"]
         key = (item["source"], item["source_job_id"])
         if key in self.items and self.items[key].get("status") in {"scored", "qualified", "filtered_out"}:
@@ -186,6 +188,19 @@ class WorkerTests(unittest.TestCase):
         self.assertNotIn("raw", stored["job_event"])
         self.assertEqual(len(sqs.messages), 1)
         self.assertNotIn("raw", json.loads(sqs.messages[0]["MessageBody"])["job_event"])
+
+    def test_worker_aliases_reserved_source_attribute_in_lease_condition(self):
+        dynamo = FakeDynamo()
+        matching = job_matching.Matcher(
+            job_matching.Config.from_environment({}), FakeS3(), FakeParameterStore(), dynamo, FakeSqs(),
+            lambda *_: {"data": [{"embedding": [1.0]}, {"embedding": [1.0]}]},
+        )
+
+        matching.process(event())
+
+        lease_request = dynamo.requests[0]
+        self.assertIn("attribute_not_exists(#source)", lease_request["ConditionExpression"])
+        self.assertEqual(lease_request["ExpressionAttributeNames"]["#source"], "source")
 
     def test_completed_duplicate_skips_embedding(self):
         dynamo, sqs = FakeDynamo(), FakeSqs()

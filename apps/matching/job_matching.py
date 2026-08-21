@@ -203,7 +203,7 @@ class Matcher:
         now = datetime.now(timezone.utc)
         item = {"source": event["source"], "source_job_id": event["source_job_id"], "status": "processing", "lease_expires_at": (now + timedelta(seconds=self.config.lease_seconds)).isoformat(), "started_at": now.isoformat()}
         try:
-            self.table.put_item(Item=item, ConditionExpression="attribute_not_exists(source) OR (#status = :processing AND lease_expires_at < :now)", ExpressionAttributeNames={"#status": "status"}, ExpressionAttributeValues={":processing": "processing", ":now": now.isoformat()})
+            self.table.put_item(Item=item, ConditionExpression="attribute_not_exists(#source) OR (#status = :processing AND lease_expires_at < :now)", ExpressionAttributeNames={"#source": "source", "#status": "status"}, ExpressionAttributeValues={":processing": "processing", ":now": now.isoformat()})
             return True
         except Exception as error:
             if _is_conditional_failure(error):
