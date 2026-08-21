@@ -39,6 +39,9 @@ structure and tests where they protect the ingestion flow, data integrity, or a
 real regression, but do not introduce abstractions or validation suites merely
 for hypothetical future scale.
 
+Avoid dedicated tests for CI/pipeline scripts unless they protect a demonstrated
+regression or materially reduce risk; keep MVP automation simple.
+
 Keep changes narrow and working end to end. Preserve the sample-first workflow
 and do not make live SerpApi calls from automated tests. Do not commit secrets
 or local runtime artifacts.

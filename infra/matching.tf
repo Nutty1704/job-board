@@ -111,3 +111,11 @@ resource "aws_lambda_function" "matching" {
 
   depends_on = [aws_cloudwatch_log_group.matching]
 }
+
+resource "aws_lambda_event_source_mapping" "matching_jobs_to_score" {
+  event_source_arn                   = aws_sqs_queue.jobs_to_score.arn
+  function_name                      = aws_lambda_function.matching.arn
+  batch_size                         = 10
+  function_response_types            = ["ReportBatchItemFailures"]
+  maximum_batching_window_in_seconds = 5
+}
