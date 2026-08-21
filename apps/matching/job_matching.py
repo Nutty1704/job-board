@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -10,6 +11,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
 from urllib.request import Request, urlopen
+
+
+logger = logging.getLogger(__name__)
 
 
 COMPLETED_STATUSES = {"filtered_out", "scored", "qualified"}
@@ -259,6 +263,7 @@ def process_sqs_batch(event: Any, matcher: Matcher) -> dict[str, list[dict[str, 
     try:
         matcher.process_many(valid)
     except Exception:
+        logger.exception("Failed matching SQS batch for message IDs: %s", ids)
         failures.extend({"itemIdentifier": message_id} for message_id in ids)
     return {"batchItemFailures": failures}
 
