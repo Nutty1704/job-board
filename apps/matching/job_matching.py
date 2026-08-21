@@ -8,6 +8,7 @@ import math
 import os
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
 from urllib.request import Request, urlopen
@@ -192,10 +193,10 @@ class Matcher:
                 similarity, score = match_score(vectors[0], vector)
                 threshold = self.config.threshold_override if self.config.threshold_override is not None else profile.qualified_score_threshold
                 status = "qualified" if score >= threshold else "scored"
-                record = {"status": status, "raw_similarity": similarity, "match_score": score, "profile_version": profile.version, "profile_s3_version": profile_version_id, "embedding_model": self.config.model}
+                record = {"status": status, "raw_similarity": Decimal(str(similarity)), "match_score": score, "profile_version": profile.version, "profile_s3_version": profile_version_id, "embedding_model": self.config.model}
                 stored = self._persist(item["event"], record)
                 if status == "qualified":
-                    self.sqs.send_message(QueueUrl=self.config.output_queue_url, MessageBody=json.dumps(stored, separators=(",", ":"), ensure_ascii=False))
+                    self.sqs.send_message(QueueUrl=self.config.output_queue_url, MessageBody=json.dumps(stored, separators=(",", ":"), ensure_ascii=False, default=_json_default))
                 results[item["index"]] = status
         return [result or "duplicate" for result in results]
 
@@ -299,3 +300,9 @@ def _location_text(job: Mapping[str, Any]) -> str:
 
 def _is_conditional_failure(error: Exception) -> bool:
     return getattr(error, "response", {}).get("Error", {}).get("Code") == "ConditionalCheckFailedException"
+
+
+def _json_default(value: Any) -> float:
+    if isinstance(value, Decimal):
+        return float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")

@@ -1,6 +1,7 @@
 import json
 import sys
 import unittest
+from decimal import Decimal
 from pathlib import Path
 
 
@@ -187,7 +188,22 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(stored["match_score"], 100)
         self.assertNotIn("raw", stored["job_event"])
         self.assertEqual(len(sqs.messages), 1)
-        self.assertNotIn("raw", json.loads(sqs.messages[0]["MessageBody"])["job_event"])
+        published = json.loads(sqs.messages[0]["MessageBody"])
+        self.assertNotIn("raw", published["job_event"])
+        self.assertEqual(published["raw_similarity"], 1.0)
+
+    def test_worker_persists_similarity_as_dynamodb_decimal(self):
+        dynamo = FakeDynamo()
+        matching = job_matching.Matcher(
+            job_matching.Config.from_environment({}), FakeS3(), FakeParameterStore(), dynamo, FakeSqs(),
+            lambda *_: {"data": [{"embedding": [1.0]}, {"embedding": [1.0]}]},
+        )
+
+        matching.process(event())
+
+        raw_similarity = dynamo.items[("adzuna", "123")]["raw_similarity"]
+        self.assertIsInstance(raw_similarity, Decimal)
+        self.assertEqual(raw_similarity, Decimal("1.0"))
 
     def test_worker_aliases_reserved_source_attribute_in_lease_condition(self):
         dynamo = FakeDynamo()
