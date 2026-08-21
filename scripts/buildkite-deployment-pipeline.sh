@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+changed_files="$(git diff --name-only "${BUILDKITE_COMMIT}^" "$BUILDKITE_COMMIT")"
+
+worker_changed() {
+  local worker="$1"
+
+  if grep -qx 'Justfile' <<<"$changed_files"; then
+    return 0
+  fi
+
+  grep -q "^apps/${worker}/" <<<"$changed_files"
+}
+
 for worker in ingestion matching; do
+  worker_changed "$worker" || continue
+
   case "$worker" in
     ingestion) display_name="Ingestion" ;;
     matching) display_name="Matching" ;;
@@ -13,6 +27,8 @@ publish_steps=""
 plan_dependencies="      - prepare-deployment"
 artifact_downloads=""
 for worker in ingestion matching; do
+  worker_changed "$worker" || continue
+
   publish_steps+="
   - block: \":package: Publish ${worker} Lambda\"
     key: publish-${worker}-approval
@@ -57,6 +73,7 @@ ${plan_dependencies}
     command: |
       : "\$\${TF_STATE_BUCKET:?TF_STATE_BUCKET must be set in Buildkite.}"
       source scripts/configure-lambda-artifact-bucket.sh
+      source scripts/configure-lambda-artifact-inputs.sh
 ${artifact_downloads}      just terraform-init
       terraform -chdir=infra plan -lock-timeout=5m -out=deployment.tfplan
       terraform -chdir=infra show -no-color deployment.tfplan > deployment-terraform-plan.txt
@@ -85,6 +102,7 @@ ${artifact_downloads}      just terraform-init
     command: |
       source scripts/configure-lambda-artifact-bucket.sh
       : "\$\${TF_STATE_BUCKET:?TF_STATE_BUCKET must be set in Buildkite.}"
+      source scripts/configure-lambda-artifact-inputs.sh
 ${artifact_downloads}      buildkite-agent artifact download infra/deployment.tfplan .
       just terraform-init
       terraform -chdir=infra apply -lock-timeout=5m -auto-approve deployment.tfplan
