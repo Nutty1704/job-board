@@ -104,7 +104,7 @@ resource "aws_lambda_function" "matching" {
       OPENAI_PARAMETER_NAME     = aws_ssm_parameter.openai.name
       OPENAI_EMBEDDING_MODEL    = "text-embedding-3-small"
       MATCHING_BATCH_SIZE       = "10"
-      MATCHING_LEASE_SECONDS    = "300"
+      MATCHING_LEASE_SECONDS    = "120"
       MATCHING_SCORE_THRESHOLD  = ""
     }
   }

@@ -157,6 +157,16 @@ def match_score(profile_embedding: list[float], job_embedding: list[float]) -> t
     return similarity, round(100 * similarity)
 
 
+def dynamodb_value(value: Any) -> Any:
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: dynamodb_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [dynamodb_value(item) for item in value]
+    return value
+
+
 class Matcher:
     def __init__(self, config: Config, s3: Any, parameter_store: Any, table: Any, sqs: Any, embeddings_request: Callable[[str, str, list[str]], Any]):
         self.config, self.s3, self.parameter_store, self.table, self.sqs, self.embeddings_request = config, s3, parameter_store, table, sqs, embeddings_request
@@ -229,7 +239,7 @@ class Matcher:
     def _persist(self, event: Mapping[str, Any], record: dict[str, Any]) -> dict[str, Any]:
         stored_event = dict(event)
         stored_event.pop("raw", None)
-        stored = {"source": event["source"], "source_job_id": event["source_job_id"], "job_event": stored_event, **record, "processed_at": datetime.now(timezone.utc).isoformat()}
+        stored = {"source": event["source"], "source_job_id": event["source_job_id"], "job_event": dynamodb_value(stored_event), **record, "processed_at": datetime.now(timezone.utc).isoformat()}
         self.table.put_item(Item=stored)
         return stored
 
