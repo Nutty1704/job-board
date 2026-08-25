@@ -148,16 +148,10 @@ data "aws_iam_policy_document" "resume_lambda" {
     resources = ["${aws_s3_bucket.project_data.arn}/matching/current.json", "${aws_s3_bucket.project_data.arn}/resumes/templates/current.docx"]
   }
   statement {
-    sid       = "WriteGeneratedResumes"
+    sid       = "ReadAndWriteGeneratedResumes"
     effect    = "Allow"
-    actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.project_data.arn}/resumes/generated/*"]
-  }
-  statement {
-    sid       = "TrackResumeGenerations"
-    effect    = "Allow"
-    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]
-    resources = [aws_dynamodb_table.resume_generations.arn]
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:PutObjectTagging"]
+    resources = ["${aws_s3_bucket.project_data.arn}/resumes/*"]
   }
   statement {
     sid       = "ConsumeHighMatches"

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any, Callable, Mapping
 from urllib.request import Request, urlopen
@@ -19,28 +17,23 @@ MODEL = "gpt-5.6-luna"
 
 @dataclass(frozen=True)
 class Config:
-    table_name: str
     profile_bucket: str
     profile_key: str
     template_bucket: str
     template_key: str
     parameter_name: str
-    lease_seconds: int = 300
-
     @classmethod
     def from_environment(cls, environment: Mapping[str, str]) -> "Config":
         values = {
-            "table_name": environment.get("RESUME_GENERATIONS_TABLE", "resume-generations").strip(),
             "profile_bucket": environment.get("MATCHING_PROFILE_BUCKET", "profiles").strip(),
             "profile_key": environment.get("MATCHING_PROFILE_KEY", "matching/current.json").strip(),
             "template_bucket": environment.get("RESUME_TEMPLATE_BUCKET", "profiles").strip(),
             "template_key": environment.get("RESUME_TEMPLATE_KEY", "resumes/templates/current.docx").strip(),
             "parameter_name": environment.get("OPENAI_PARAMETER_NAME", "openai").strip(),
         }
-        lease_seconds = int(environment.get("RESUME_LEASE_SECONDS", "300"))
-        if not all(values.values()) or lease_seconds < 1:
+        if not all(values.values()):
             raise ValueError("Resume configuration is invalid")
-        return cls(**values, lease_seconds=lease_seconds)
+        return cls(**values)
 
 
 @dataclass(frozen=True)
@@ -105,10 +98,6 @@ def validate_qualified_match(value: Any) -> dict[str, Any]:
     if not isinstance(value.get("job_event"), dict):
         raise ValueError("Qualified match requires job_event")
     return value
-
-
-def generation_id(source: str, source_job_id: str, profile_s3_version: str, template_s3_version: str) -> str:
-    return hashlib.sha256("\0".join((source, source_job_id, profile_s3_version, template_s3_version)).encode()).hexdigest()
 
 
 def validate_selection(value: Any, profile: ResumeProfile) -> dict[str, Any]:
@@ -181,34 +170,24 @@ def openai_response(api_key: str, model: str, prompt: dict[str, Any], request_se
 
 
 class ResumeConsumer:
-    def __init__(self, config: Config, s3: Any, parameter_store: Any, table: Any, responses_request: Callable[[str, str, dict[str, Any]], Any] | None = None, renderer: Callable[[bytes, dict[str, Any]], bytes] = render_docx):
-        self.config, self.s3, self.parameter_store, self.table = config, s3, parameter_store, table
+    def __init__(self, config: Config, s3: Any, parameter_store: Any, responses_request: Callable[[str, str, dict[str, Any]], Any] | None = None, renderer: Callable[[bytes, dict[str, Any]], bytes] = render_docx):
+        self.config, self.s3, self.parameter_store = config, s3, parameter_store
         self.responses_request, self.renderer = responses_request, renderer
 
     def process(self, message: dict[str, Any]) -> str:
         message = validate_qualified_match(message)
+        artifact_key = f"resumes/{message['source_job_id']}.docx"
+        if self._object_exists(self.config.template_bucket, artifact_key):
+            return "duplicate"
         template, template_version = self._get_object(self.config.template_bucket, self.config.template_key)
         profile_contents, profile_version = self._get_object(self.config.profile_bucket, self.config.profile_key, message["profile_s3_version"])
         if profile_version and profile_version != message["profile_s3_version"]:
             raise ValueError("Matching profile version changed while loading")
         profile = parse_resume_profile(profile_contents)
-        identifier = generation_id(message["source"], message["source_job_id"], message["profile_s3_version"], template_version)
-        lease = self._acquire_lease(identifier, message, template_version)
-        if lease == "completed": return "duplicate"
-        if lease == "active": return "retry"
-        try:
-            response = self._response(profile, message)
-            selection = validate_selection(_response_json(response), profile)
-            artifact_key = f"resumes/generated/{message['source']}/{message['source_job_id']}/{identifier}.docx"
-            artifact = self.s3.put_object(Bucket=self.config.template_bucket, Key=artifact_key, Body=self.renderer(template, render_context(profile, selection, message["job_event"])), ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document", Metadata={"generation-id": identifier, "profile-s3-version": message["profile_s3_version"], "template-s3-version": template_version, "model": MODEL})
-            artifact_version = artifact.get("VersionId")
-            if not isinstance(artifact_version, str) or not artifact_version:
-                raise ValueError("Generated artifact must have a version ID")
-            self._complete(identifier, artifact_key, artifact_version, selection, response.get("id"))
-            return "completed"
-        except Exception:
-            self._fail(identifier)
-            raise
+        response = self._response(profile, message)
+        selection = validate_selection(_response_json(response), profile)
+        self.s3.put_object(Bucket=self.config.template_bucket, Key=artifact_key, Body=self.renderer(template, render_context(profile, selection, message["job_event"])), ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document", Metadata={"profile-s3-version": message["profile_s3_version"], "template-s3-version": template_version, "model": MODEL, "source": message["source"], "source-job-id": message["source_job_id"]}, Tagging="expires-after-days=21")
+        return "completed"
 
     def _get_object(self, bucket: str, key: str, version: str | None = None) -> tuple[bytes, str]:
         request = {"Bucket": bucket, "Key": key}
@@ -219,32 +198,20 @@ class ResumeConsumer:
             raise ValueError("S3 object must have a version ID")
         return response["Body"].read(), version_id
 
-    def _acquire_lease(self, identifier: str, message: dict[str, Any], template_version: str) -> str:
-        now = datetime.now(timezone.utc)
-        existing = self.table.get_item(Key={"generation_id": identifier}, ConsistentRead=True).get("Item")
-        if existing and existing.get("status") == "completed": return "completed"
-        if existing and existing.get("lease_expires_at", "") >= now.isoformat(): return "active"
-        item = {"generation_id": identifier, "status": "processing", "lease_expires_at": (now + timedelta(seconds=self.config.lease_seconds)).isoformat(), "source": message["source"], "source_job_id": message["source_job_id"], "profile_s3_version": message["profile_s3_version"], "template_s3_version": template_version, "started_at": now.isoformat()}
+    def _object_exists(self, bucket: str, key: str) -> bool:
         try:
-            self.table.put_item(Item=item, ConditionExpression="attribute_not_exists(generation_id) OR (#status IN (:processing, :failed) AND lease_expires_at < :now)", ExpressionAttributeNames={"#status": "status"}, ExpressionAttributeValues={":processing": "processing", ":failed": "failed", ":now": now.isoformat()})
-            return "acquired"
+            self.s3.head_object(Bucket=bucket, Key=key)
+            return True
         except Exception as error:
-            if not _is_conditional_failure(error): raise
-            current = self.table.get_item(Key={"generation_id": identifier}, ConsistentRead=True).get("Item", {})
-            return "completed" if current.get("status") == "completed" else "active"
+            if isinstance(error, FileNotFoundError) or getattr(error, "response", {}).get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}:
+                return False
+            raise
 
     def _response(self, profile: ResumeProfile, message: dict[str, Any]) -> dict[str, Any]:
         key = json.loads(self.parameter_store.get_parameter(Name=self.config.parameter_name, WithDecryption=True)["Parameter"]["Value"])["api_key"]
         if not isinstance(key, str) or not key.strip(): raise ValueError("OpenAI parameter must contain api_key")
         prompt = {"job": message["job_event"], "resume": profile.value["resume"]}
         return openai_response(key, MODEL, prompt, self.responses_request)
-
-    def _complete(self, identifier: str, artifact_key: str, artifact_version: str, selection: dict[str, Any], response_id: Any) -> None:
-        self.table.update_item(Key={"generation_id": identifier}, UpdateExpression="SET #status = :status, artifact_key = :artifact_key, artifact_version = :artifact_version, selected_source_ids = :selected_source_ids, model_response_id = :model_response_id, completed_at = :completed_at REMOVE lease_expires_at", ExpressionAttributeNames={"#status": "status"}, ExpressionAttributeValues={":status": "completed", ":artifact_key": artifact_key, ":artifact_version": artifact_version, ":selected_source_ids": [bullet for record in [*selection["experience"], *selection["projects"]] for bullet in record["source_bullet_ids"]], ":model_response_id": response_id if isinstance(response_id, str) else "", ":completed_at": datetime.now(timezone.utc).isoformat()})
-
-    def _fail(self, identifier: str) -> None:
-        self.table.update_item(Key={"generation_id": identifier}, UpdateExpression="SET #status = :status, lease_expires_at = :lease_expires_at, failed_at = :failed_at", ExpressionAttributeNames={"#status": "status"}, ExpressionAttributeValues={":status": "failed", ":lease_expires_at": datetime.now(timezone.utc).isoformat(), ":failed_at": datetime.now(timezone.utc).isoformat()})
-
 
 def process_sqs_batch(event: Any, consumer: ResumeConsumer) -> dict[str, list[dict[str, str]]]:
     if not isinstance(event, dict) or not isinstance(event.get("Records"), list): raise ValueError("SQS event requires Records")
@@ -264,7 +231,7 @@ def lambda_handler(event: Any, context: Any) -> dict[str, list[dict[str, str]]]:
     del context
     import boto3
     config = Config.from_environment(os.environ)
-    return process_sqs_batch(event, ResumeConsumer(config, boto3.client("s3"), boto3.client("ssm"), boto3.resource("dynamodb").Table(config.table_name)))
+    return process_sqs_batch(event, ResumeConsumer(config, boto3.client("s3"), boto3.client("ssm")))
 
 
 def _response_json(response: Any) -> Any:
@@ -314,5 +281,3 @@ def _identified_records(records: list[Any], label: str, kinds: set[str] | None) 
         if identifier in result or (kinds and record.get("kind") not in kinds): raise ValueError(label)
         result[identifier] = record
     return result
-def _is_conditional_failure(error: Exception) -> bool:
-    return getattr(error, "response", {}).get("Error", {}).get("Code") == "ConditionalCheckFailedException"

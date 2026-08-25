@@ -69,6 +69,26 @@ resource "aws_s3_bucket_lifecycle_configuration" "project_data" {
       noncurrent_days = 90
     }
   }
+
+  rule {
+    id     = "ExpireGeneratedResumes"
+    status = "Enabled"
+
+    filter {
+      tag {
+        key   = "expires-after-days"
+        value = "21"
+      }
+    }
+
+    expiration {
+      days = 21
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 21
+    }
+  }
 }
 
 resource "aws_cloudwatch_log_group" "matching" {

@@ -94,4 +94,5 @@ Before deploying, populate the ignored `local/matching-profile.json` with the
 `resume` source-bullet pool and upload it to `matching/current.json`; upload
 the Jinja-enabled `local/resume-template.docx` to
 `resumes/templates/current.docx`. Both project-data objects must retain S3
-versions. Generated documents are written beneath `resumes/generated/`.
+versions. Generated documents are written as `resumes/<job_id>.docx` and expire
+after 21 days.

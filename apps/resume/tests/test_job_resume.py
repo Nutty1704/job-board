@@ -1,8 +1,6 @@
-import hashlib
 import json
 import sys
 import unittest
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -85,8 +83,9 @@ class ProfileValidationTests(unittest.TestCase):
 
 
 class FakeS3:
-    def __init__(self):
+    def __init__(self, existing_keys=None):
         self.puts = []
+        self.existing_keys = set(existing_keys or [])
 
     def get_object(self, **kwargs):
         if kwargs["Key"] == "matching/current.json":
@@ -95,6 +94,12 @@ class FakeS3:
 
     def put_object(self, **kwargs):
         self.puts.append(kwargs)
+        self.existing_keys.add(kwargs["Key"])
+        return {"VersionId": "artifact-v3"}
+
+    def head_object(self, **kwargs):
+        if kwargs["Key"] not in self.existing_keys:
+            raise FileNotFoundError(kwargs["Key"])
         return {"VersionId": "artifact-v3"}
 
 
@@ -107,69 +112,31 @@ class FakeParameters:
     def get_parameter(self, **kwargs): return {"Parameter": {"Value": '{"api_key":"test-key"}'}}
 
 
-class FakeTable:
-    def __init__(self): self.items, self.puts, self.updates = {}, [], []
-    def get_item(self, **kwargs):
-        item = self.items.get(kwargs["Key"]["generation_id"])
-        return {"Item": item} if item else {}
-    def put_item(self, **kwargs): self.puts.append(kwargs); self.items[kwargs["Item"]["generation_id"]] = kwargs["Item"]
-    def update_item(self, **kwargs):
-        self.updates.append(kwargs)
-        item = self.items[kwargs["Key"]["generation_id"]]
-        values = kwargs["ExpressionAttributeValues"]
-        item.update({"status": values[":status"], "artifact_key": values.get(":artifact_key"), "artifact_version": values.get(":artifact_version"), "model_response_id": values.get(":model_response_id")})
-
-
 class ConsumerTests(unittest.TestCase):
     def selection(self):
         return {"summary": "Early-career software engineer.", "skill_groups": [{"group": "Languages", "skills": ["Go"]}], "experience": [{"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api"]}, {"id": "retail", "source_bullet_ids": ["retail-team"]}], "projects": [{"id": "platform", "source_bullet_ids": ["platform-fullstack"]}]}
 
-    def consumer(self, table=None, request=None):
-        return job_resume.ResumeConsumer(job_resume.Config.from_environment({}), FakeS3(), FakeParameters(), table or FakeTable(), request or (lambda *_: {"id": "resp-1", "output_text": json.dumps(self.selection())}), lambda template, context: b"docx")
+    def consumer(self, s3=None, request=None):
+        return job_resume.ResumeConsumer(job_resume.Config.from_environment({}), s3 or FakeS3(), FakeParameters(), request or (lambda *_: {"id": "resp-1", "output_text": json.dumps(self.selection())}), lambda template, context: b"docx")
 
-    def test_generation_id_uses_source_job_and_input_versions(self):
-        expected = hashlib.sha256(b"adzuna\x00123\x00profile-v1\x00template-v2").hexdigest()
-        self.assertEqual(job_resume.generation_id("adzuna", "123", "profile-v1", "template-v2"), expected)
-
-    def test_consumer_stores_rendered_artifact_and_operational_metadata(self):
+    def test_consumer_stores_rendered_artifact_at_job_scoped_s3_key(self):
         consumer = self.consumer()
         result = consumer.process(high_match())
 
         self.assertEqual(result, "completed")
         upload = consumer.s3.puts[0]
-        self.assertEqual(upload["Key"], "resumes/generated/adzuna/123/" + job_resume.generation_id("adzuna", "123", "profile-v1", "template-v2") + ".docx")
+        self.assertEqual(upload["Key"], "resumes/123.docx")
         self.assertEqual(upload["Metadata"]["profile-s3-version"], "profile-v1")
-        stored = next(iter(consumer.table.items.values()))
-        self.assertEqual(stored["status"], "completed")
-        self.assertEqual(stored["model_response_id"], "resp-1")
-        self.assertEqual(stored["artifact_version"], "artifact-v3")
-        self.assertNotIn("model_text", stored)
+        self.assertEqual(upload["Metadata"]["source"], "adzuna")
+        self.assertEqual(upload["Metadata"]["source-job-id"], "123")
+        self.assertEqual(upload["Tagging"], "expires-after-days=21")
 
-    def test_completed_generation_skips_model_call(self):
-        table, calls = FakeTable(), []
-        key = job_resume.generation_id("adzuna", "123", "profile-v1", "template-v2")
-        table.items[key] = {"generation_id": key, "status": "completed"}
-        consumer = self.consumer(table, lambda *_: calls.append(True))
+    def test_existing_job_resume_skips_model_call(self):
+        calls = []
+        consumer = self.consumer(FakeS3({"resumes/123.docx"}), lambda *_: calls.append(True))
 
         self.assertEqual(consumer.process(high_match()), "duplicate")
         self.assertEqual(calls, [])
-
-    def test_active_generation_requests_retry_without_model_call(self):
-        table, calls = FakeTable(), []
-        key = job_resume.generation_id("adzuna", "123", "profile-v1", "template-v2")
-        table.items[key] = {"generation_id": key, "status": "processing", "lease_expires_at": (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()}
-        consumer = self.consumer(table, lambda *_: calls.append(True))
-
-        self.assertEqual(consumer.process(high_match()), "retry")
-        self.assertEqual(calls, [])
-
-    def test_expired_generation_is_reclaimed(self):
-        table = FakeTable()
-        key = job_resume.generation_id("adzuna", "123", "profile-v1", "template-v2")
-        table.items[key] = {"generation_id": key, "status": "processing", "lease_expires_at": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()}
-
-        self.assertEqual(self.consumer(table).process(high_match()), "completed")
-        self.assertEqual(len(table.puts), 1)
 
     def test_openai_request_uses_strict_responses_json_schema(self):
         captured = []
