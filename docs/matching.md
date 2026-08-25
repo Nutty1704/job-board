@@ -21,8 +21,15 @@ messages already waiting in `jobs-to-score`.
 {
   "version": "2026-08-20",
   "candidate_summary": "Experience, education, skills, target roles, and preferences in plain text.",
+  "candidate_skills": [
+    "python",
+    "java",
+    "javascript",
+    "aws",
+    "kubernetes",
+    "terraform"
+  ],
   "filters": {
-    "required_skills_any": ["python", "aws"],
     "allowed_locations": ["sydney", "melbourne"],
     "excluded_phrases": ["security clearance required"],
     "max_required_experience_years": 2
@@ -70,11 +77,23 @@ terraform -chdir=infra apply
 Terraform intentionally uses the exact name `job-board-personal`; if another
 AWS account owns it, the apply fails rather than selecting a suffixed name.
 
-The worker rejects jobs with no description, an unallowed location, an
-excluded phrase, no required skill, or explicit required/minimum/at-least
-professional experience over the configured limit. Preferred experience does
-not reject a job. The score is a non-negative cosine similarity scaled to 100;
-it is a ranking signal, not a calibrated percentage.
+The worker rejects jobs with no description, an unallowed location, an excluded phrase, or explicit
+required/minimum/at-least professional experience over the configured limit.
+Preferred experience does not reject a job.
+
+For surviving jobs, `gpt-5.6-luna` reads the candidate summary, curated
+`candidate_skills`, and job text. It returns only schema-validated evidence:
+job skills classified as required, core, or preferred; whether each maps to a
+candidate skill; and a role-alignment score. The worker calculates the final
+score itself: 85% weighted skill fit and 15% role alignment. Required, core,
+and preferred skills have weights of 70%, 25%, and 5% respectively; absent
+groups have their weight redistributed. DynamoDB retains the score components
+and the evidence for review. The model never makes the qualification decision.
+
+The worker evaluates up to five jobs concurrently within an SQS batch of ten.
+An individual OpenAI failure releases that job's DynamoDB lease and returns
+only its SQS message ID for retry; successful jobs in the same batch remain
+acknowledged.
 
 After Terraform applies, replace the placeholder in the
 `openai_parameter_name` standard SSM SecureString with `{"api_key":"…"}`.

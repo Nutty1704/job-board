@@ -15,7 +15,7 @@ package-ingestion:
 
 # Package the matching Lambda handler for upload to the versioned artifact bucket.
 package-matching:
-    python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/matching.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); archive.write("apps/matching/job_matching.py", "job_matching.py"); archive.close()'
+    python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/matching.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); archive.write("apps/matching/job_matching.py", "job_matching.py"); archive.write("apps/matching/config.py", "config.py"); archive.close()'
 
 # Run Trunk's configured linters and format checks.
 trunk-check:
