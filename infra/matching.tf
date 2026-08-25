@@ -82,13 +82,13 @@ resource "aws_lambda_function" "matching" {
   #checkov:skip=CKV_AWS_50: X-Ray is deferred for this MVP worker.
   #checkov:skip=CKV_AWS_116: SQS source-message failures redrive to jobs-to-score-dlq; Lambda DLQs do not handle SQS event-source failures.
   function_name                  = "${local.name_prefix}-matching"
-  description                    = "Filters and embeds normalized jobs before publishing high matches."
+  description                    = "Filters and assesses normalized jobs before publishing high matches."
   role                           = aws_iam_role.matching_lambda.arn
   runtime                        = var.matching_lambda_runtime
   handler                        = var.matching_lambda_handler
-  timeout                        = 60
+  timeout                        = 120
   memory_size                    = 512
-  reserved_concurrent_executions = 1
+  reserved_concurrent_executions = 2
   s3_bucket                      = var.matching_lambda_s3_bucket
   s3_key                         = var.matching_lambda_s3_key
   s3_object_version              = var.matching_lambda_s3_object_version
@@ -102,7 +102,7 @@ resource "aws_lambda_function" "matching" {
       MATCHING_PROFILE_KEY      = "matching/current.json"
       MATCHING_PROFILE_REGION   = var.aws_region
       OPENAI_PARAMETER_NAME     = aws_ssm_parameter.openai.name
-      OPENAI_EMBEDDING_MODEL    = "text-embedding-3-small"
+      OPENAI_MATCHING_MODEL     = "gpt-5.6-luna"
       MATCHING_BATCH_SIZE       = "10"
       MATCHING_LEASE_SECONDS    = "300"
       MATCHING_SCORE_THRESHOLD  = ""

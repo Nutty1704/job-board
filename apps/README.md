@@ -64,9 +64,10 @@ published; an oversized normalized event fails the invocation.
 ## Matching Lambda
 
 `matching/job_matching.py` consumes `jobs-to-score`, records each source job
-once in DynamoDB, applies the profile's hard filters, and embeds the profile
-and eligible jobs with OpenAI `text-embedding-3-small`. Jobs with a score at
-or above the profile threshold are sent to `high-match-jobs`.
+once in DynamoDB, applies the profile's hard filters, and uses OpenAI
+`gpt-5.6-luna` to classify job-skill evidence. Deterministic code combines
+weighted skill fit with role alignment; jobs at or above the profile threshold
+are sent to `high-match-jobs`.
 
 ```sh
 just test-matching
