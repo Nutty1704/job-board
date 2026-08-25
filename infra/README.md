@@ -33,6 +33,13 @@ database-connected workers exist.
 VPC/NAT, RDS, OpenAI, matching, S3 resume storage, and the resume worker are
 intentionally deferred to later milestones.
 
+The current worker set also includes matching and resume generation. Matching
+publishes qualified jobs to `high-match-jobs`; the resume Lambda consumes one
+message at a time, reads the matching profile version named in that message,
+and writes generated DOCX files to the versioned project-data bucket. Upload
+the local profile and template objects separately; Terraform never stores
+their contents.
+
 ## Adzuna configuration
 
 After the first apply, place this JSON value in the `adzuna_secret_arn` output

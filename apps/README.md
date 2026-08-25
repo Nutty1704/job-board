@@ -78,3 +78,22 @@ The output ZIP is `dist/matching.zip`. The worker uses only the standard
 library and Lambda's `boto3`; tests use fakes and never contact AWS or OpenAI.
 The `high-match-jobs` consumer must tolerate duplicates: publishing happens
 after DynamoDB persistence and SQS delivery is at least once.
+
+## Resume Lambda
+
+`resume/job_resume.py` consumes qualified matching records from
+`high-match-jobs` and produces one DOCX resume per versioned profile/template
+pair. It uses a DynamoDB processing lease keyed by the source job and input
+versions, so duplicate SQS deliveries do not repeat the model call.
+
+```sh
+just test-resume
+just package-resume
+```
+
+Before deploying, populate the ignored `local/matching-profile.json` with the
+`resume` source-bullet pool and upload it to `matching/current.json`; upload
+the Jinja-enabled `local/resume-template.docx` to
+`resumes/templates/current.docx`. Both project-data objects must retain S3
+versions. Generated documents are written as `resumes/<job_id>.docx` and expire
+after 21 days.

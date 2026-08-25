@@ -112,6 +112,61 @@ resource "aws_iam_role_policy" "matching_lambda" {
   policy = data.aws_iam_policy_document.matching_lambda.json
 }
 
+data "aws_iam_policy_document" "resume_lambda_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "resume_lambda" {
+  name               = "${local.name_prefix}-resume-lambda"
+  assume_role_policy = data.aws_iam_policy_document.resume_lambda_assume_role.json
+}
+
+data "aws_iam_policy_document" "resume_lambda" {
+  statement {
+    sid       = "WriteLogs"
+    effect    = "Allow"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.resume.arn}:*"]
+  }
+  statement {
+    sid       = "ReadOpenAiParameter"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter"]
+    resources = [aws_ssm_parameter.openai.arn]
+  }
+  statement {
+    sid       = "ReadResumeInputs"
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:GetObjectVersion"]
+    resources = ["${aws_s3_bucket.project_data.arn}/matching/current.json", "${aws_s3_bucket.project_data.arn}/resumes/templates/current.docx"]
+  }
+  statement {
+    sid       = "ReadAndWriteGeneratedResumes"
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:PutObjectTagging"]
+    resources = ["${aws_s3_bucket.project_data.arn}/resumes/*"]
+  }
+  statement {
+    sid       = "ConsumeHighMatches"
+    effect    = "Allow"
+    actions   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
+    resources = [aws_sqs_queue.high_match_jobs.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "resume_lambda" {
+  name   = "${local.name_prefix}-resume-lambda"
+  role   = aws_iam_role.resume_lambda.id
+  policy = data.aws_iam_policy_document.resume_lambda.json
+}
+
 data "aws_iam_policy_document" "scheduler_assume_role" {
   statement {
     effect  = "Allow"

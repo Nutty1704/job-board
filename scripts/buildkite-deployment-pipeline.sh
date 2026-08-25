@@ -13,12 +13,13 @@ worker_changed() {
   grep -q "^apps/${worker}/" <<<"$changed_files"
 }
 
-for worker in ingestion matching; do
+for worker in ingestion matching resume; do
   worker_changed "$worker" || continue
 
   case "$worker" in
     ingestion) display_name="Ingestion" ;;
     matching) display_name="Matching" ;;
+    resume) display_name="Resume" ;;
   esac
   buildkite-agent annotate "### ${display_name} Lambda\n\nApprove publishing the main commit to \`lambdas/${worker}/latest.zip\` and its immutable commit-keyed rollback copy." --style warning --context "${worker}-deployment"
 done
@@ -26,7 +27,7 @@ done
 publish_steps=""
 plan_dependencies="      - prepare-deployment"
 artifact_downloads=""
-for worker in ingestion matching; do
+for worker in ingestion matching resume; do
   worker_changed "$worker" || continue
 
   publish_steps+="

@@ -14,11 +14,17 @@ steps:
     command: just test-matching
     timeout_in_minutes: 10
 
+  - label: ":snake: Test resume"
+    key: resume-test
+    command: just test-resume
+    timeout_in_minutes: 10
+
   - label: ":terraform: Validate infrastructure"
     key: terraform-validate
     depends_on:
       - ingestion-test
       - matching-test
+      - resume-test
     command: |
       terraform -chdir=infra init -backend=false
       just terraform-fmt-check

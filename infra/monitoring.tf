@@ -63,3 +63,18 @@ resource "aws_cloudwatch_metric_alarm" "high_match_jobs_dlq_messages" {
   alarm_actions       = var.alarm_actions
   dimensions          = { QueueName = aws_sqs_queue.high_match_jobs_dlq.name }
 }
+
+resource "aws_cloudwatch_metric_alarm" "resume_errors" {
+  alarm_name          = "${local.name_prefix}-resume-errors"
+  alarm_description   = "The resume Lambda reported an error."
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = var.alarm_actions
+  dimensions          = { FunctionName = aws_lambda_function.resume.function_name }
+}
