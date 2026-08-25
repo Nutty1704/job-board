@@ -31,7 +31,7 @@ resource "aws_sqs_queue" "high_match_jobs_dlq" {
 resource "aws_sqs_queue" "high_match_jobs" {
   name                       = "${local.name_prefix}-high-match-jobs"
   message_retention_seconds  = 345600 # 4 days
-  visibility_timeout_seconds = 180
+  visibility_timeout_seconds = 600
   sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({

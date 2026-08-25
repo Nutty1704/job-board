@@ -74,6 +74,35 @@ variable "matching_lambda_runtime" {
   default     = "python3.12"
 }
 
+variable "resume_lambda_s3_bucket" {
+  description = "S3 bucket containing the packaged resume Lambda ZIP."
+  type        = string
+}
+
+variable "resume_lambda_s3_key" {
+  description = "S3 object key for the packaged resume Lambda ZIP."
+  type        = string
+  default     = "lambdas/resume/latest.zip"
+}
+
+variable "resume_lambda_s3_object_version" {
+  description = "Optional immutable S3 object version for the resume Lambda ZIP."
+  type        = string
+  default     = null
+}
+
+variable "resume_lambda_handler" {
+  description = "Python handler exposed by the resume Lambda package."
+  type        = string
+  default     = "job_resume.lambda_handler"
+}
+
+variable "resume_lambda_runtime" {
+  description = "Lambda runtime for the resume function."
+  type        = string
+  default     = "python3.12"
+}
+
 variable "adzuna_search_query" {
   description = "Initial Adzuna search query."
   type        = string

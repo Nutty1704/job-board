@@ -37,3 +37,13 @@ output "openai_parameter_name" {
   description = "Standard SecureString whose value must be populated as {\"api_key\":\"…\"} outside Terraform."
   value       = aws_ssm_parameter.openai.name
 }
+
+output "resume_lambda_name" {
+  description = "Name of the SQS resume-generation Lambda."
+  value       = aws_lambda_function.resume.function_name
+}
+
+output "resume_generations_table_name" {
+  description = "DynamoDB table that deduplicates resume generations."
+  value       = aws_dynamodb_table.resume_generations.name
+}

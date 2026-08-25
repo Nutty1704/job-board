@@ -9,6 +9,10 @@ test-ingestion:
 test-matching:
     python3 -m unittest discover -s apps/matching/tests -v
 
+# Run the dependency-free Lambda resume unit tests.
+test-resume:
+    python3 -m unittest discover -s apps/resume/tests -v
+
 # Package the Lambda handler for upload to the versioned artifact bucket.
 package-ingestion:
     python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/ingestion.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); archive.write("apps/ingestion/job_ingestion.py", "job_ingestion.py"); archive.close()'
@@ -16,6 +20,13 @@ package-ingestion:
 # Package the matching Lambda handler for upload to the versioned artifact bucket.
 package-matching:
     python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/matching.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); archive.write("apps/matching/job_matching.py", "job_matching.py"); archive.close()'
+
+# Package the resume handler and its DOCX templating dependency for Lambda.
+package-resume:
+    rm -rf build/resume
+    python3 -m pip install --disable-pip-version-check -q -r apps/resume/requirements.txt -t build/resume
+    cp apps/resume/job_resume.py build/resume/job_resume.py
+    python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/resume.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); [archive.write(path, path.relative_to("build/resume")) for path in Path("build/resume").rglob("*") if path.is_file()]; archive.close()'
 
 # Run Trunk's configured linters and format checks.
 trunk-check:
