@@ -154,6 +154,17 @@ data "aws_iam_policy_document" "resume_lambda" {
     resources = ["${aws_s3_bucket.project_data.arn}/resumes/*"]
   }
   statement {
+    sid       = "ListGeneratedResumes"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.project_data.arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["resumes/*"]
+    }
+  }
+  statement {
     sid       = "ConsumeHighMatches"
     effect    = "Allow"
     actions   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
