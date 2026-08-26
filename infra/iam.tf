@@ -158,11 +158,6 @@ data "aws_iam_policy_document" "resume_lambda" {
     effect    = "Allow"
     actions   = ["s3:ListBucket"]
     resources = [aws_s3_bucket.project_data.arn]
-    condition {
-      test     = "StringLike"
-      variable = "s3:prefix"
-      values   = ["resumes/*"]
-    }
   }
   statement {
     sid       = "ConsumeHighMatches"
