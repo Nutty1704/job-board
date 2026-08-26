@@ -1,6 +1,7 @@
 import json
 import sys
 import unittest
+from decimal import Decimal
 from pathlib import Path
 
 
@@ -58,6 +59,14 @@ def skill(name, candidate_skill=None, evidence="Required in the job description.
 
 
 class ProfileAndScoringTests(unittest.TestCase):
+    def test_dynamodb_value_converts_nested_floats_to_decimals(self):
+        value = {"salary": 150000.0, "ranges": [120000.5]}
+
+        self.assertEqual(
+            job_matching.dynamodb_value(value),
+            {"salary": Decimal("150000.0"), "ranges": [Decimal("120000.5")]},
+        )
+
     def test_profile_requires_curated_candidate_skills(self):
         value = profile_data()
         del value["candidate_skills"]
@@ -180,6 +189,15 @@ class WorkerTests(unittest.TestCase):
         self.assertNotIn("raw", stored["job_event"])
         self.assertNotIn("raw_similarity", stored)
         self.assertEqual(len(sqs.messages), 1)
+
+    def test_worker_serializes_decimal_job_values_when_publishing_qualified_job(self):
+        dynamo, sqs = FakeDynamo(), FakeSqs()
+        matching = self.matcher(dynamo, sqs)
+
+        self.assertEqual(matching.process(event(latitude=-33.865715)), "qualified")
+
+        published = json.loads(sqs.messages[0]["MessageBody"])
+        self.assertEqual(published["job_event"]["job"]["latitude"], -33.865715)
 
     def test_worker_releases_lease_when_luna_assessment_fails(self):
         dynamo = FakeDynamo()

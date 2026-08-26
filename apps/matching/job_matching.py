@@ -8,6 +8,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any, Callable, Mapping
 from urllib.request import Request, urlopen
 
@@ -214,7 +215,7 @@ class Matcher:
                     }
                     stored = self._persist(event, record)
                     if status == "qualified":
-                        self.sqs.send_message(QueueUrl=self.config.output_queue_url, MessageBody=json.dumps(stored, separators=(",", ":"), ensure_ascii=False))
+                        self.sqs.send_message(QueueUrl=self.config.output_queue_url, MessageBody=json.dumps(stored, separators=(",", ":"), ensure_ascii=False, default=_json_value))
                     results[index] = status
                 except Exception as error:
                     self._release_lease(event)
@@ -337,6 +338,12 @@ def _location_text(job: Mapping[str, Any]) -> str:
 
 def _stored_skills(skills: tuple[SkillAssessment, ...]) -> list[dict[str, str | None]]:
     return [{"skill": skill.skill, "candidate_skill": skill.candidate_skill, "evidence": skill.evidence} for skill in skills]
+
+
+def _json_value(value: Any) -> float:
+    if isinstance(value, Decimal):
+        return float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def _is_conditional_failure(error: Exception) -> bool:
