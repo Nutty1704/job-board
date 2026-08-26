@@ -74,6 +74,22 @@ class ProfileValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "technical experience"):
             job_resume.validate_selection(selection, profile)
 
+    def test_selection_schema_requires_each_experience_with_its_bullet_limits(self):
+        profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
+
+        schema = job_resume._selection_schema(profile)
+        experience = schema["properties"]["experience"]
+        rokt = experience["properties"]["rokt"]
+        retail = experience["properties"]["retail"]
+
+        self.assertEqual(experience["required"], ["rokt", "retail"])
+        self.assertFalse(experience["additionalProperties"])
+        self.assertEqual(rokt["minItems"], 4)
+        self.assertEqual(rokt["maxItems"], 5)
+        self.assertEqual(rokt["items"]["enum"], ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api", "rokt-data"])
+        self.assertEqual(retail["minItems"], 1)
+        self.assertEqual(retail["maxItems"], 2)
+
     def test_validate_selection_rejects_duplicate_bullet_ids(self):
         profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
         selection = {"summary": "Early-career software engineer.", "skill_groups": [{"group": "Languages", "skills": ["Go"]}], "experience": [{"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-go", "rokt-go", "rokt-go"]}, {"id": "retail", "source_bullet_ids": ["retail-team"]}], "projects": []}
@@ -130,6 +146,21 @@ class ConsumerTests(unittest.TestCase):
         self.assertEqual(upload["Metadata"]["source"], "adzuna")
         self.assertEqual(upload["Metadata"]["source-job-id"], "123")
         self.assertEqual(upload["Tagging"], "expires-after-days=21")
+
+    def test_consumer_accepts_profile_keyed_experience_selection(self):
+        selection = self.selection()
+        selection["experience"] = {
+            "rokt": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api"],
+            "retail": ["retail-team"],
+        }
+        requests = []
+        consumer = self.consumer(request=lambda request: requests.append(request) or {"id": "resp-1", "output_text": json.dumps(selection)})
+
+        self.assertEqual(consumer.process(high_match()), "completed")
+        schema = requests[0]["text"]["format"]["schema"]["properties"]["experience"]
+        self.assertEqual(schema["required"], ["rokt", "retail"])
+        self.assertEqual(schema["properties"]["rokt"]["minItems"], 4)
+        self.assertEqual(schema["properties"]["retail"]["maxItems"], 2)
 
     def test_existing_job_resume_skips_model_call(self):
         calls = []
