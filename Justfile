@@ -24,8 +24,10 @@ package-matching:
 # Package the resume handler and its DOCX templating dependency for Lambda.
 package-resume:
     rm -rf build/resume
-    python3 -m pip install --disable-pip-version-check -q -r apps/resume/requirements.txt -t build/resume
+    mkdir -p build/resume dist
+    docker run --rm --platform linux/amd64 --entrypoint /bin/sh -v "$PWD":/var/task -w /var/task public.ecr.aws/lambda/python:3.12 -c 'python -m pip install --disable-pip-version-check -q -r apps/resume/requirements.txt -t build/resume'
     cp apps/resume/job_resume.py build/resume/job_resume.py
+    docker run --rm --platform linux/amd64 --entrypoint /bin/sh -v "$PWD":/var/task -w /var/task/build/resume public.ecr.aws/lambda/python:3.12 -c 'python -c "from lxml import etree"'
     python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/resume.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); [archive.write(path, path.relative_to("build/resume")) for path in Path("build/resume").rglob("*") if path.is_file()]; archive.close()'
 
 # Run Trunk's configured linters and format checks.
