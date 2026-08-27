@@ -128,8 +128,14 @@ def validate_selection(value: Any, profile: ResumeProfile) -> dict[str, Any]:
         count = len(selected["source_bullet_ids"])
         if record["kind"] == "technical" and not 4 <= count <= 5:
             raise ValueError("technical experience requires 4-5 bullets")
-        if record["kind"] == "transferable" and not 1 <= count <= 2:
-            raise ValueError("transferable experience requires 1-2 bullets")
+        if record["kind"] == "transferable" and count != 2:
+            raise ValueError("transferable experience requires exactly 2 bullets")
+    if len(projects) > 3:
+        raise ValueError("at most three projects may be selected")
+    for project in projects:
+        count = len(project["source_bullet_ids"])
+        if count != 3:
+            raise ValueError("project requires exactly 3 bullets")
     return value
 
 
@@ -147,7 +153,7 @@ def render_context(profile: ResumeProfile, selection: dict[str, Any], job: Mappi
 def render_docx(template: bytes, context: dict[str, Any]) -> bytes:
     from docxtpl import DocxTemplate
     document = DocxTemplate(BytesIO(template))
-    document.render(context)
+    document.render(context, autoescape=True)
     output = BytesIO()
     document.save(output)
     return output.getvalue()
@@ -275,7 +281,7 @@ def _experience_selection_rules(profile: ResumeProfile) -> list[dict[str, Any]]:
         {
             "experience_id": identifier,
             "required": True,
-            "minimum_bullets": 4 if record["kind"] == "technical" else 1,
+            "minimum_bullets": 4 if record["kind"] == "technical" else 2,
             "maximum_bullets": 5 if record["kind"] == "technical" else 2,
         }
         for identifier, record in profile.experience.items()
@@ -285,7 +291,9 @@ def _experience_selection_rules(profile: ResumeProfile) -> list[dict[str, Any]]:
 def _selection_schema(profile: ResumeProfile | None = None) -> dict[str, Any]:
     source_ids = {"type": "array", "items": {"type": "string"}}
     record = {"type": "object", "additionalProperties": False, "required": ["id", "source_bullet_ids"], "properties": {"id": {"type": "string"}, "source_bullet_ids": source_ids}}
+    project_record = {"type": "object", "additionalProperties": False, "required": ["id", "source_bullet_ids"], "properties": {"id": {"type": "string"}, "source_bullet_ids": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string"}}}}
     experience: dict[str, Any] = {"type": "array", "items": record}
+    projects: dict[str, Any] = {"type": "array", "maxItems": 3, "items": project_record}
     if profile is not None:
         experience = {
             "type": "object",
@@ -294,14 +302,15 @@ def _selection_schema(profile: ResumeProfile | None = None) -> dict[str, Any]:
             "properties": {
                 identifier: {
                     "type": "array",
-                    "minItems": 4 if record["kind"] == "technical" else 1,
+                    "minItems": 4 if record["kind"] == "technical" else 2,
                     "maxItems": 5 if record["kind"] == "technical" else 2,
                     "items": {"type": "string", "enum": [bullet["id"] for bullet in record["source_bullets"]]},
                 }
                 for identifier, record in profile.experience.items()
             },
         }
-    return {"type": "object", "additionalProperties": False, "required": ["summary", "skill_groups", "experience", "projects"], "properties": {"summary": {"type": "string"}, "skill_groups": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["group", "skills"], "properties": {"group": {"type": "string"}, "skills": source_ids}}}, "experience": experience, "projects": {"type": "array", "items": record}}}
+        projects = {"type": "array", "maxItems": 3, "items": {"anyOf": [{"type": "object", "additionalProperties": False, "required": ["id", "source_bullet_ids"], "properties": {"id": {"const": identifier}, "source_bullet_ids": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string", "enum": [bullet["id"] for bullet in record["source_bullets"]]}}}} for identifier, record in profile.projects.items()]}}
+    return {"type": "object", "additionalProperties": False, "required": ["summary", "skill_groups", "experience", "projects"], "properties": {"summary": {"type": "string"}, "skill_groups": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["group", "skills"], "properties": {"group": {"type": "string"}, "skills": source_ids}}}, "experience": experience, "projects": projects}}
 
 
 def _required_string(value: Mapping[str, Any], key: str) -> str:

@@ -1,6 +1,9 @@
 import json
+import importlib.util
 import sys
 import unittest
+from copy import deepcopy
+from io import BytesIO
 from pathlib import Path
 
 
@@ -27,6 +30,7 @@ def profile_data():
                     {"id": "rokt-ci", "text": "Built CI pipelines.", "tags": ["ci/cd"]},
                     {"id": "rokt-api", "text": "Built APIs.", "tags": ["backend"]},
                     {"id": "rokt-data", "text": "Improved data reliability.", "tags": ["data"]},
+                    {"id": "rokt-ops", "text": "Improved operations.", "tags": ["operations"]},
                 ]},
                 {"id": "retail", "kind": "transferable", "employer": "Shop", "title": "Team Member", "dates": "2020–2023", "source_bullets": [
                     {"id": "retail-team", "text": "Worked with customers.", "tags": ["communication"]},
@@ -36,6 +40,7 @@ def profile_data():
             "projects": [{"id": "platform", "name": "Experiment Platform", "dates": "2025", "source_bullets": [
                 {"id": "platform-fullstack", "text": "Built a full-stack experiment platform.", "tags": ["python", "react"]},
                 {"id": "platform-oauth", "text": "Added OAuth SSO.", "tags": ["security"]},
+                {"id": "platform-cicd", "text": "Automated platform deployment.", "tags": ["ci/cd"]},
             ]}],
         },
     }
@@ -69,9 +74,43 @@ class ProfileValidationTests(unittest.TestCase):
 
     def test_validate_selection_enforces_role_bullet_counts(self):
         profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
-        selection = {"summary": "Early-career software engineer.", "skill_groups": [{"group": "Languages", "skills": ["Go"]}], "experience": [{"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-k8s", "rokt-ci"]}, {"id": "retail", "source_bullet_ids": ["retail-team"]}], "projects": []}
+        selection = {"summary": "Early-career software engineer.", "skill_groups": [{"group": "Languages", "skills": ["Go"]}], "experience": [{"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api", "rokt-data", "rokt-ops"]}, {"id": "retail", "source_bullet_ids": ["retail-team"]}], "projects": []}
 
         with self.assertRaisesRegex(ValueError, "technical experience"):
+            job_resume.validate_selection(selection, profile)
+
+        selection["experience"][0]["source_bullet_ids"] = ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api"]
+
+        with self.assertRaisesRegex(ValueError, "transferable experience"):
+            job_resume.validate_selection(selection, profile)
+
+    def test_validate_selection_limits_projects_and_project_bullets(self):
+        value = profile_data()
+        value["resume"]["projects"] = [deepcopy(value["resume"]["projects"][0]) for _ in range(4)]
+        for index, project in enumerate(value["resume"]["projects"]):
+            project["id"] = f"project-{index}"
+            for bullet in project["source_bullets"]:
+                bullet["id"] = f"{project['id']}-{bullet['id']}"
+        profile = job_resume.parse_resume_profile(json.dumps(value).encode())
+        selection = {
+            "summary": "Early-career software engineer.",
+            "skill_groups": [{"group": "Languages", "skills": ["Go"]}],
+            "experience": [
+                {"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api"]},
+                {"id": "retail", "source_bullet_ids": ["retail-team", "retail-own"]},
+            ],
+            "projects": [
+                {"id": project["id"], "source_bullet_ids": [project["source_bullets"][0]["id"]]}
+                for project in profile.projects.values()
+            ],
+        }
+
+        with self.assertRaisesRegex(ValueError, "at most three projects"):
+            job_resume.validate_selection(selection, profile)
+
+        selection["projects"] = selection["projects"][:1]
+        selection["projects"][0]["source_bullet_ids"] = ["project-0-platform-fullstack", "project-0-platform-oauth"]
+        with self.assertRaisesRegex(ValueError, "project requires exactly 3 bullets"):
             job_resume.validate_selection(selection, profile)
 
     def test_selection_schema_requires_each_experience_with_its_bullet_limits(self):
@@ -86,9 +125,17 @@ class ProfileValidationTests(unittest.TestCase):
         self.assertFalse(experience["additionalProperties"])
         self.assertEqual(rokt["minItems"], 4)
         self.assertEqual(rokt["maxItems"], 5)
-        self.assertEqual(rokt["items"]["enum"], ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api", "rokt-data"])
-        self.assertEqual(retail["minItems"], 1)
+        self.assertEqual(rokt["items"]["enum"], ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api", "rokt-data", "rokt-ops"])
+        self.assertEqual(retail["minItems"], 2)
         self.assertEqual(retail["maxItems"], 2)
+        projects = schema["properties"]["projects"]
+        self.assertEqual(projects["maxItems"], 3)
+        project = projects["items"]["anyOf"][0]
+        self.assertEqual(project["properties"]["id"]["const"], "platform")
+        bullets = project["properties"]["source_bullet_ids"]
+        self.assertEqual(bullets["minItems"], 3)
+        self.assertEqual(bullets["maxItems"], 3)
+        self.assertEqual(bullets["items"]["enum"], ["platform-fullstack", "platform-oauth", "platform-cicd"])
 
     def test_validate_selection_rejects_duplicate_bullet_ids(self):
         profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
@@ -130,7 +177,7 @@ class FakeParameters:
 
 class ConsumerTests(unittest.TestCase):
     def selection(self):
-        return {"summary": "Early-career software engineer.", "skill_groups": [{"group": "Languages", "skills": ["Go"]}], "experience": [{"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api"]}, {"id": "retail", "source_bullet_ids": ["retail-team"]}], "projects": [{"id": "platform", "source_bullet_ids": ["platform-fullstack"]}]}
+        return {"summary": "Early-career software engineer.", "skill_groups": [{"group": "Languages", "skills": ["Go"]}], "experience": [{"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api"]}, {"id": "retail", "source_bullet_ids": ["retail-team", "retail-own"]}], "projects": [{"id": "platform", "source_bullet_ids": ["platform-fullstack", "platform-oauth", "platform-cicd"]}]}
 
     def consumer(self, s3=None, request=None):
         return job_resume.ResumeConsumer(job_resume.Config.from_environment({}), s3 or FakeS3(), FakeParameters(), request or (lambda *_: {"id": "resp-1", "output_text": json.dumps(self.selection())}), lambda template, context: b"docx")
@@ -151,7 +198,7 @@ class ConsumerTests(unittest.TestCase):
         selection = self.selection()
         selection["experience"] = {
             "rokt": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api"],
-            "retail": ["retail-team"],
+            "retail": ["retail-team", "retail-own"],
         }
         requests = []
         consumer = self.consumer(request=lambda request: requests.append(request) or {"id": "resp-1", "output_text": json.dumps(selection)})
@@ -161,6 +208,8 @@ class ConsumerTests(unittest.TestCase):
         self.assertEqual(schema["required"], ["rokt", "retail"])
         self.assertEqual(schema["properties"]["rokt"]["minItems"], 4)
         self.assertEqual(schema["properties"]["retail"]["maxItems"], 2)
+        self.assertNotIn("key_achievement_ids", requests[0]["text"]["format"]["schema"]["properties"])
+        self.assertNotIn("key_achievement_selection_rules", json.loads(requests[0]["input"][1]["content"][0]["text"]))
 
     def test_existing_job_resume_skips_model_call(self):
         calls = []
@@ -175,6 +224,19 @@ class ConsumerTests(unittest.TestCase):
 
         self.assertEqual(captured[0]["reasoning"]["effort"], "low")
         self.assertTrue(captured[0]["text"]["format"]["strict"])
+
+    @unittest.skipUnless(importlib.util.find_spec("docxtpl"), "requires DOCX rendering dependencies")
+    def test_render_docx_preserves_ampersands_in_dynamic_text(self):
+        from docx import Document
+
+        template = BytesIO()
+        document = Document()
+        document.add_paragraph("{{ group }}")
+        document.save(template)
+
+        rendered = Document(BytesIO(job_resume.render_docx(template.getvalue(), {"group": "Cloud & Platform"})))
+
+        self.assertEqual(rendered.paragraphs[0].text, "Cloud & Platform")
 
     def test_batch_retries_only_active_or_failed_work(self):
         response = job_resume.process_sqs_batch({"Records": [{"messageId": "active", "body": json.dumps(high_match())}]}, type("C", (), {"process": lambda self, _: "retry"})())
