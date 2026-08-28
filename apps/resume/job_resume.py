@@ -8,6 +8,7 @@ import os
 from dataclasses import dataclass
 from io import BytesIO
 from typing import Any, Callable, Mapping
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
@@ -171,6 +172,9 @@ def openai_response(api_key: str, model: str, prompt: dict[str, Any], request_se
             return json.loads(response.read().decode())
     except RuntimeError:
         raise
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"OpenAI Responses request failed ({error.code}): {detail}") from error
     except Exception as error:
         raise RuntimeError("OpenAI Responses request failed") from error
 
@@ -309,7 +313,7 @@ def _selection_schema(profile: ResumeProfile | None = None) -> dict[str, Any]:
                 for identifier, record in profile.experience.items()
             },
         }
-        projects = {"type": "array", "maxItems": 3, "items": {"anyOf": [{"type": "object", "additionalProperties": False, "required": ["id", "source_bullet_ids"], "properties": {"id": {"const": identifier}, "source_bullet_ids": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string", "enum": [bullet["id"] for bullet in record["source_bullets"]]}}}} for identifier, record in profile.projects.items()]}}
+        projects = {"type": "array", "maxItems": 3, "items": {"anyOf": [{"type": "object", "additionalProperties": False, "required": ["id", "source_bullet_ids"], "properties": {"id": {"type": "string", "enum": [identifier]}, "source_bullet_ids": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string", "enum": [bullet["id"] for bullet in record["source_bullets"]]}}}} for identifier, record in profile.projects.items()]}}
     return {"type": "object", "additionalProperties": False, "required": ["summary", "skill_groups", "experience", "projects"], "properties": {"summary": {"type": "string"}, "skill_groups": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["group", "skills"], "properties": {"group": {"type": "string"}, "skills": source_ids}}}, "experience": experience, "projects": projects}}
 
 

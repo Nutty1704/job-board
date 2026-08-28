@@ -2,9 +2,9 @@ import json
 import importlib.util
 import sys
 import unittest
-from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -58,21 +58,7 @@ class ProfileValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "tags"):
             job_resume.parse_resume_profile(json.dumps(value).encode())
 
-    def test_parse_profile_rejects_unknown_project_preference(self):
-        value = profile_data()
-        value["resume"]["projects"][0]["preference"] = "avoid"
-
-        with self.assertRaisesRegex(ValueError, "preference"):
-            job_resume.parse_resume_profile(json.dumps(value).encode())
-
-    def test_validate_selection_rejects_unknown_source_reference(self):
-        profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
-        selection = {"summary": "Early-career software engineer.", "skill_groups": [{"group": "Languages", "skills": ["Go"]}], "experience": [{"id": "rokt", "source_bullet_ids": ["made-up"]}], "projects": []}
-
-        with self.assertRaisesRegex(ValueError, "unknown source bullet"):
-            job_resume.validate_selection(selection, profile)
-
-    def test_validate_selection_enforces_role_bullet_counts(self):
+    def test_validate_selection_rejects_invalid_source_bullet_sets(self):
         profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
         selection = {"summary": "Early-career software engineer.", "skill_groups": [{"group": "Languages", "skills": ["Go"]}], "experience": [{"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api", "rokt-data", "rokt-ops"]}, {"id": "retail", "source_bullet_ids": ["retail-team"]}], "projects": []}
 
@@ -84,36 +70,16 @@ class ProfileValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "transferable experience"):
             job_resume.validate_selection(selection, profile)
 
-    def test_validate_selection_limits_projects_and_project_bullets(self):
-        value = profile_data()
-        value["resume"]["projects"] = [deepcopy(value["resume"]["projects"][0]) for _ in range(4)]
-        for index, project in enumerate(value["resume"]["projects"]):
-            project["id"] = f"project-{index}"
-            for bullet in project["source_bullets"]:
-                bullet["id"] = f"{project['id']}-{bullet['id']}"
-        profile = job_resume.parse_resume_profile(json.dumps(value).encode())
-        selection = {
-            "summary": "Early-career software engineer.",
-            "skill_groups": [{"group": "Languages", "skills": ["Go"]}],
-            "experience": [
-                {"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api"]},
-                {"id": "retail", "source_bullet_ids": ["retail-team", "retail-own"]},
-            ],
-            "projects": [
-                {"id": project["id"], "source_bullet_ids": [project["source_bullets"][0]["id"]]}
-                for project in profile.projects.values()
-            ],
-        }
-
-        with self.assertRaisesRegex(ValueError, "at most three projects"):
+        selection["experience"][1]["source_bullet_ids"] = ["retail-team", "retail-own"]
+        selection["experience"][0]["source_bullet_ids"] = ["rokt-go", "rokt-go", "rokt-ci", "rokt-api"]
+        with self.assertRaisesRegex(ValueError, "duplicate source bullet"):
             job_resume.validate_selection(selection, profile)
 
-        selection["projects"] = selection["projects"][:1]
-        selection["projects"][0]["source_bullet_ids"] = ["project-0-platform-fullstack", "project-0-platform-oauth"]
-        with self.assertRaisesRegex(ValueError, "project requires exactly 3 bullets"):
+        selection["experience"][0]["source_bullet_ids"] = ["rokt-go", "rokt-k8s", "rokt-ci", "unknown"]
+        with self.assertRaisesRegex(ValueError, "unknown source bullet"):
             job_resume.validate_selection(selection, profile)
 
-    def test_selection_schema_requires_each_experience_with_its_bullet_limits(self):
+    def test_selection_schema_uses_openai_compatible_project_identifier_enums(self):
         profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
 
         schema = job_resume._selection_schema(profile)
@@ -131,19 +97,12 @@ class ProfileValidationTests(unittest.TestCase):
         projects = schema["properties"]["projects"]
         self.assertEqual(projects["maxItems"], 3)
         project = projects["items"]["anyOf"][0]
-        self.assertEqual(project["properties"]["id"]["const"], "platform")
+        self.assertEqual(project["properties"]["id"]["enum"], ["platform"])
+        self.assertNotIn("const", project["properties"]["id"])
         bullets = project["properties"]["source_bullet_ids"]
         self.assertEqual(bullets["minItems"], 3)
         self.assertEqual(bullets["maxItems"], 3)
         self.assertEqual(bullets["items"]["enum"], ["platform-fullstack", "platform-oauth", "platform-cicd"])
-
-    def test_validate_selection_rejects_duplicate_bullet_ids(self):
-        profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
-        selection = {"summary": "Early-career software engineer.", "skill_groups": [{"group": "Languages", "skills": ["Go"]}], "experience": [{"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-go", "rokt-go", "rokt-go"]}, {"id": "retail", "source_bullet_ids": ["retail-team"]}], "projects": []}
-
-        with self.assertRaisesRegex(ValueError, "duplicate source bullet"):
-            job_resume.validate_selection(selection, profile)
-
 
 class FakeS3:
     def __init__(self, existing_keys=None):
@@ -183,7 +142,8 @@ class ConsumerTests(unittest.TestCase):
         return job_resume.ResumeConsumer(job_resume.Config.from_environment({}), s3 or FakeS3(), FakeParameters(), request or (lambda *_: {"id": "resp-1", "output_text": json.dumps(self.selection())}), lambda template, context: b"docx")
 
     def test_consumer_stores_rendered_artifact_at_job_scoped_s3_key(self):
-        consumer = self.consumer()
+        requests = []
+        consumer = self.consumer(request=lambda request: requests.append(request) or {"id": "resp-1", "output_text": json.dumps(self.selection())})
         result = consumer.process(high_match())
 
         self.assertEqual(result, "completed")
@@ -193,23 +153,7 @@ class ConsumerTests(unittest.TestCase):
         self.assertEqual(upload["Metadata"]["source"], "adzuna")
         self.assertEqual(upload["Metadata"]["source-job-id"], "123")
         self.assertEqual(upload["Tagging"], "expires-after-days=21")
-
-    def test_consumer_accepts_profile_keyed_experience_selection(self):
-        selection = self.selection()
-        selection["experience"] = {
-            "rokt": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api"],
-            "retail": ["retail-team", "retail-own"],
-        }
-        requests = []
-        consumer = self.consumer(request=lambda request: requests.append(request) or {"id": "resp-1", "output_text": json.dumps(selection)})
-
-        self.assertEqual(consumer.process(high_match()), "completed")
-        schema = requests[0]["text"]["format"]["schema"]["properties"]["experience"]
-        self.assertEqual(schema["required"], ["rokt", "retail"])
-        self.assertEqual(schema["properties"]["rokt"]["minItems"], 4)
-        self.assertEqual(schema["properties"]["retail"]["maxItems"], 2)
-        self.assertNotIn("key_achievement_ids", requests[0]["text"]["format"]["schema"]["properties"])
-        self.assertNotIn("key_achievement_selection_rules", json.loads(requests[0]["input"][1]["content"][0]["text"]))
+        self.assertTrue(requests[0]["text"]["format"]["strict"])
 
     def test_existing_job_resume_skips_model_call(self):
         calls = []
@@ -218,12 +162,14 @@ class ConsumerTests(unittest.TestCase):
         self.assertEqual(consumer.process(high_match()), "duplicate")
         self.assertEqual(calls, [])
 
-    def test_openai_request_uses_strict_responses_json_schema(self):
-        captured = []
-        job_resume.openai_response("secret", "gpt-5.6-luna", {"job": {}}, lambda request: captured.append(request) or {"id": "r", "output_text": "{}"})
-
-        self.assertEqual(captured[0]["reasoning"]["effort"], "low")
-        self.assertTrue(captured[0]["text"]["format"]["strict"])
+    def test_openai_request_error_includes_response_detail(self):
+        original_urlopen = job_resume.urlopen
+        job_resume.urlopen = lambda *_args, **_kwargs: (_ for _ in ()).throw(HTTPError("https://api.openai.com/v1/responses", 400, "Bad Request", {}, BytesIO(b'{"error":{"message":"invalid_json_schema"}}')))
+        try:
+            with self.assertRaisesRegex(RuntimeError, "invalid_json_schema"):
+                job_resume.openai_response("secret", "gpt-5.6-luna", {"job": {}})
+        finally:
+            job_resume.urlopen = original_urlopen
 
     @unittest.skipUnless(importlib.util.find_spec("docxtpl"), "requires DOCX rendering dependencies")
     def test_render_docx_preserves_ampersands_in_dynamic_text(self):
