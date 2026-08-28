@@ -5,6 +5,7 @@ import unittest
 from copy import deepcopy
 from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -113,7 +114,7 @@ class ProfileValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "project requires exactly 3 bullets"):
             job_resume.validate_selection(selection, profile)
 
-    def test_selection_schema_requires_each_experience_with_its_bullet_limits(self):
+    def test_selection_schema_uses_openai_compatible_project_identifier_enums(self):
         profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
 
         schema = job_resume._selection_schema(profile)
@@ -131,7 +132,8 @@ class ProfileValidationTests(unittest.TestCase):
         projects = schema["properties"]["projects"]
         self.assertEqual(projects["maxItems"], 3)
         project = projects["items"]["anyOf"][0]
-        self.assertEqual(project["properties"]["id"]["const"], "platform")
+        self.assertEqual(project["properties"]["id"]["enum"], ["platform"])
+        self.assertNotIn("const", project["properties"]["id"])
         bullets = project["properties"]["source_bullet_ids"]
         self.assertEqual(bullets["minItems"], 3)
         self.assertEqual(bullets["maxItems"], 3)
@@ -224,6 +226,15 @@ class ConsumerTests(unittest.TestCase):
 
         self.assertEqual(captured[0]["reasoning"]["effort"], "low")
         self.assertTrue(captured[0]["text"]["format"]["strict"])
+
+    def test_openai_request_error_includes_response_detail(self):
+        original_urlopen = job_resume.urlopen
+        job_resume.urlopen = lambda *_args, **_kwargs: (_ for _ in ()).throw(HTTPError("https://api.openai.com/v1/responses", 400, "Bad Request", {}, BytesIO(b'{"error":{"message":"invalid_json_schema"}}')))
+        try:
+            with self.assertRaisesRegex(RuntimeError, "invalid_json_schema"):
+                job_resume.openai_response("secret", "gpt-5.6-luna", {"job": {}})
+        finally:
+            job_resume.urlopen = original_urlopen
 
     @unittest.skipUnless(importlib.util.find_spec("docxtpl"), "requires DOCX rendering dependencies")
     def test_render_docx_preserves_ampersands_in_dynamic_text(self):
