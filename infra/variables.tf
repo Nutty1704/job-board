@@ -143,3 +143,18 @@ variable "alarm_actions" {
   type        = list(string)
   default     = []
 }
+
+variable "dashboard_lambda_s3_bucket" {
+  type        = string
+  description = "S3 bucket containing the dashboard API Lambda ZIP."
+}
+variable "dashboard_lambda_s3_key" {
+  type        = string
+  default     = "lambdas/dashboard/latest.zip"
+  description = "S3 key for the dashboard API Lambda ZIP."
+}
+variable "dashboard_lambda_s3_object_version" {
+  type        = string
+  default     = null
+  description = "Optional immutable S3 object version for the dashboard API Lambda ZIP."
+}

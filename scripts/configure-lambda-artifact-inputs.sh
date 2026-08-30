@@ -3,7 +3,7 @@ set -euo pipefail
 
 : "${LAMBDA_ARTIFACTS_BUCKET:?LAMBDA_ARTIFACTS_BUCKET must be set in Buildkite.}"
 
-for worker in ingestion matching resume; do
+for worker in ingestion matching resume dashboard; do
   key="lambdas/${worker}/latest.zip"
   version="$(aws s3api head-object \
     --bucket "$LAMBDA_ARTIFACTS_BUCKET" \

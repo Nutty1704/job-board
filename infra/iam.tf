@@ -173,6 +173,40 @@ resource "aws_iam_role_policy" "resume_lambda" {
   policy = data.aws_iam_policy_document.resume_lambda.json
 }
 
+data "aws_iam_policy_document" "dashboard_api_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+resource "aws_iam_role" "dashboard_api" {
+  name               = "${local.name_prefix}-dashboard-api"
+  assume_role_policy = data.aws_iam_policy_document.dashboard_api_assume_role.json
+}
+data "aws_iam_policy_document" "dashboard_api" {
+  statement {
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.dashboard_api.arn}:*"]
+  }
+  statement {
+    actions   = ["dynamodb:Scan"]
+    resources = [aws_dynamodb_table.job_matches.arn]
+  }
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.project_data.arn}/resumes/*"]
+  }
+}
+resource "aws_iam_role_policy" "dashboard_api" {
+  name   = "${local.name_prefix}-dashboard-api"
+  role   = aws_iam_role.dashboard_api.id
+  policy = data.aws_iam_policy_document.dashboard_api.json
+}
+
 data "aws_iam_policy_document" "scheduler_assume_role" {
   statement {
     effect  = "Allow"
