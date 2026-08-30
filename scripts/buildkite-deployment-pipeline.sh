@@ -42,6 +42,9 @@ for worker in ingestion matching resume dashboard; do
     command: |
       source scripts/configure-lambda-artifact-bucket.sh
       : \"\$\${TF_VAR_${worker}_lambda_s3_bucket:?TF_VAR_${worker}_lambda_s3_bucket must be set in Buildkite.}\"
+      if [ \"${worker}\" = \"dashboard\" ]; then
+        npm ci --prefix apps/dashboard
+      fi
       just package-${worker}
       latest_key=\"lambdas/${worker}/latest.zip\"
       commit_key=\"lambdas/${worker}/\$\${BUILDKITE_COMMIT}.zip\"
