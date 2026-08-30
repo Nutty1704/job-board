@@ -42,3 +42,10 @@ output "resume_lambda_name" {
   description = "Name of the SQS resume-generation Lambda."
   value       = aws_lambda_function.resume.function_name
 }
+
+output "dashboard_api_url" {
+  description = "HTTP API URL for the dashboard backend."
+  value       = aws_apigatewayv2_api.dashboard.api_endpoint
+}
+output "dashboard_user_pool_id" { value = aws_cognito_user_pool.dashboard.id }
+output "dashboard_user_pool_client_id" { value = aws_cognito_user_pool_client.dashboard.id }

@@ -13,6 +13,9 @@ test-matching:
 test-resume:
     python3 -m unittest discover -s apps/resume/tests -v
 
+test-dashboard-api:
+    npm --prefix apps/dashboard test
+
 # Package the Lambda handler for upload to the versioned artifact bucket.
 package-ingestion:
     python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/ingestion.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); archive.write("apps/ingestion/job_ingestion.py", "job_ingestion.py"); archive.close()'
@@ -29,6 +32,13 @@ package-resume:
     cp apps/resume/job_resume.py build/resume/job_resume.py
     docker run --rm --platform linux/amd64 --entrypoint /bin/sh -v "$PWD":/var/task -w /var/task/build/resume public.ecr.aws/lambda/python:3.12 -c 'python -c "from lxml import etree"'
     python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/resume.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); [archive.write(path, path.relative_to("build/resume")) for path in Path("build/resume").rglob("*") if path.is_file()]; archive.close()'
+
+package-dashboard:
+    npm --prefix apps/dashboard run build --workspace=@job-dashboard/api
+    mkdir -p build/dashboard-api/node_modules
+    cp apps/dashboard/api/dist/index.mjs build/dashboard-api/index.mjs
+    cp -R apps/dashboard/node_modules/@aws-sdk apps/dashboard/node_modules/@smithy build/dashboard-api/node_modules/
+    python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/dashboard.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); [archive.write(path, path.relative_to("build/dashboard-api")) for path in Path("build/dashboard-api").rglob("*") if path.is_file()]; archive.close()'
 
 # Run Trunk's configured linters and format checks.
 trunk-check:
