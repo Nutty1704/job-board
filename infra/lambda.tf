@@ -8,11 +8,11 @@ resource "aws_lambda_function" "ingestion" {
   #checkov:skip=CKV_AWS_272: Code-signing will be added with the CI artifact-publishing pipeline.
   #checkov:skip=CKV_AWS_50: X-Ray is deferred until the multi-worker processing flow exists.
   function_name                  = "${local.name_prefix}-ingestion"
-  description                    = "Fetches Sydney software-engineering jobs from Adzuna and queues them for scoring."
+  description                    = "Fetches software-engineering jobs from configured Australian locations and queues them for scoring."
   role                           = aws_iam_role.ingestion_lambda.arn
   runtime                        = var.ingestion_lambda_runtime
   handler                        = var.ingestion_lambda_handler
-  timeout                        = 60
+  timeout                        = 120
   memory_size                    = 512
   reserved_concurrent_executions = 1
 
