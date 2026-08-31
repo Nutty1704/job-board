@@ -6,8 +6,9 @@ Deployable applications and workers live here.
 
 `ingestion/job_ingestion.py` is a dependency-free Python 3.12 Lambda handler
 for Adzuna. It reads its credentials from Secrets Manager, fetches page 1 of
-the configured Australian search, normalizes each result, and sends one
-message per job to `jobs-to-score`.
+each configured Australian location search, normalizes each result, and sends
+one message per job to `jobs-to-score`. The default deployment searches Sydney
+and Melbourne for a total of 75 jobs per daily invocation, split as 38 and 37.
 
 Run the fixture-driven unit tests and produce the deployment ZIP from the
 repository root:

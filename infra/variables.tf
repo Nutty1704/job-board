@@ -110,9 +110,9 @@ variable "adzuna_search_query" {
 }
 
 variable "adzuna_location" {
-  description = "Initial Adzuna search location."
+  description = "Comma-separated Adzuna search locations."
   type        = string
-  default     = "Sydney"
+  default     = "Sydney,Melbourne"
 }
 
 variable "adzuna_country" {
@@ -122,13 +122,13 @@ variable "adzuna_country" {
 }
 
 variable "adzuna_results_per_page" {
-  description = "Number of Adzuna results fetched from page one per invocation."
+  description = "Total number of Adzuna results fetched across all configured locations per invocation."
   type        = number
-  default     = 50
+  default     = 75
 
   validation {
-    condition     = var.adzuna_results_per_page >= 1 && var.adzuna_results_per_page <= 50
-    error_message = "adzuna_results_per_page must be between 1 and 50."
+    condition     = var.adzuna_results_per_page >= 1 && var.adzuna_results_per_page <= 100
+    error_message = "adzuna_results_per_page must be between 1 and 100."
   }
 }
 
