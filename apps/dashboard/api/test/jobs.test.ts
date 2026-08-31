@@ -48,6 +48,21 @@ test("maps normalized dashboard job summaries", () => {
   });
 });
 
+test("maps the ingestion apply link stored beside the normalized job", () => {
+  const record = {
+    ...records[1],
+    job_event: {
+      ...records[1].job_event,
+      source_url: "https://example.test/apply",
+    },
+  };
+
+  assert.equal(
+    mapRecord(record as any, false).sourceUrl,
+    "https://example.test/apply",
+  );
+});
+
 test("defaults to qualified jobs, scores descending, and paginates", async () => {
   const response = await listJobs(
     { scan: async () => records as any, hasResume: async () => false },
