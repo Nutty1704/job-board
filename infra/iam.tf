@@ -198,7 +198,11 @@ data "aws_iam_policy_document" "dashboard_api" {
   }
   statement {
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.project_data.arn}/resumes/*"]
+    resources = ["${aws_s3_bucket.project_data.arn}/resumes/*", "${aws_s3_bucket.project_data.arn}/matching/current.json"]
+  }
+  statement {
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.high_match_jobs.arn]
   }
   statement {
     actions   = ["s3:ListBucket"]

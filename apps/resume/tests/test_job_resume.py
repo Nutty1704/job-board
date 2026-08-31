@@ -162,6 +162,13 @@ class ConsumerTests(unittest.TestCase):
         self.assertEqual(consumer.process(high_match()), "duplicate")
         self.assertEqual(calls, [])
 
+    def test_manual_resume_uses_a_namespaced_artifact_key(self):
+        message = {**high_match(), "source": "manual", "source_job_id": "123e4567-e89b-12d3-a456-426614174000"}
+        consumer = self.consumer()
+
+        self.assertEqual(consumer.process(message), "completed")
+        self.assertEqual(consumer.s3.puts[0]["Key"], "resumes/manual/123e4567-e89b-12d3-a456-426614174000.docx")
+
     def test_openai_request_error_includes_response_detail(self):
         original_urlopen = job_resume.urlopen
         job_resume.urlopen = lambda *_args, **_kwargs: (_ for _ in ()).throw(HTTPError("https://api.openai.com/v1/responses", 400, "Bad Request", {}, BytesIO(b'{"error":{"message":"invalid_json_schema"}}')))

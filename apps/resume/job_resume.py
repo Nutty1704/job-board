@@ -186,7 +186,8 @@ class ResumeConsumer:
 
     def process(self, message: dict[str, Any]) -> str:
         message = validate_qualified_match(message)
-        artifact_key = f"resumes/{message['source_job_id']}.docx"
+        prefix = "resumes/manual" if message["source"] == "manual" else "resumes"
+        artifact_key = f"{prefix}/{message['source_job_id']}.docx"
         if self._object_exists(self.config.template_bucket, artifact_key):
             return "duplicate"
         template, template_version = self._get_object(self.config.template_bucket, self.config.template_key)
