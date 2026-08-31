@@ -35,8 +35,9 @@ package-resume:
 
 package-dashboard:
     npm --prefix apps/dashboard run build --workspace=@job-dashboard/api
+    rm -rf build/dashboard-api
     mkdir -p build/dashboard-api/node_modules
-    cp apps/dashboard/api/dist/index.mjs build/dashboard-api/index.mjs
+    cp apps/dashboard/api/dist/index.cjs build/dashboard-api/index.js
     cp -R apps/dashboard/node_modules/@aws-sdk apps/dashboard/node_modules/@smithy build/dashboard-api/node_modules/
     python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/dashboard.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); [archive.write(path, path.relative_to("build/dashboard-api")) for path in Path("build/dashboard-api").rglob("*") if path.is_file()]; archive.close()'
 
