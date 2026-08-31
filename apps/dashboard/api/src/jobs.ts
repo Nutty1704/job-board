@@ -19,7 +19,10 @@ export function mapRecord(record: RecordValue, resumeAvailable: boolean) {
     location: string(job.location?.display_name) ?? undefined,
     matchScore: number(record.match_score),
     processedAt: string(record.processed_at),
-    sourceUrl: string(job.redirect_url) ?? string(job.url),
+    sourceUrl:
+      string(record.job_event?.source_url) ??
+      string(job.redirect_url) ??
+      string(job.url),
     resumeAvailable,
   };
 }
