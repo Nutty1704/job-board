@@ -200,6 +200,10 @@ data "aws_iam_policy_document" "dashboard_api" {
     actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.project_data.arn}/resumes/*"]
   }
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.project_data.arn]
+  }
 }
 resource "aws_iam_role_policy" "dashboard_api" {
   name   = "${local.name_prefix}-dashboard-api"
