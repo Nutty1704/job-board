@@ -299,6 +299,7 @@ def _selection_schema(profile: ResumeProfile | None = None) -> dict[str, Any]:
     project_record = {"type": "object", "additionalProperties": False, "required": ["id", "source_bullet_ids"], "properties": {"id": {"type": "string"}, "source_bullet_ids": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string"}}}}
     experience: dict[str, Any] = {"type": "array", "items": record}
     projects: dict[str, Any] = {"type": "array", "maxItems": 3, "items": project_record}
+    skill_groups: dict[str, Any] = {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["group", "skills"], "properties": {"group": {"type": "string"}, "skills": source_ids}}}
     if profile is not None:
         experience = {
             "type": "object",
@@ -315,7 +316,8 @@ def _selection_schema(profile: ResumeProfile | None = None) -> dict[str, Any]:
             },
         }
         projects = {"type": "array", "maxItems": 3, "items": {"anyOf": [{"type": "object", "additionalProperties": False, "required": ["id", "source_bullet_ids"], "properties": {"id": {"type": "string", "enum": [identifier]}, "source_bullet_ids": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string", "enum": [bullet["id"] for bullet in record["source_bullets"]]}}}} for identifier, record in profile.projects.items()]}}
-    return {"type": "object", "additionalProperties": False, "required": ["summary", "skill_groups", "experience", "projects"], "properties": {"summary": {"type": "string"}, "skill_groups": {"type": "array", "items": {"type": "object", "additionalProperties": False, "required": ["group", "skills"], "properties": {"group": {"type": "string"}, "skills": source_ids}}}, "experience": experience, "projects": projects}}
+        skill_groups = {"type": "array", "items": {"anyOf": [{"type": "object", "additionalProperties": False, "required": ["group", "skills"], "properties": {"group": {"type": "string", "enum": [name]}, "skills": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": skills}}}} for name, skills in profile.value["resume"]["skill_catalog"].items()]}}
+    return {"type": "object", "additionalProperties": False, "required": ["summary", "skill_groups", "experience", "projects"], "properties": {"summary": {"type": "string"}, "skill_groups": skill_groups, "experience": experience, "projects": projects}}
 
 
 def _required_string(value: Mapping[str, Any], key: str) -> str:

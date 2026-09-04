@@ -104,6 +104,17 @@ class ProfileValidationTests(unittest.TestCase):
         self.assertEqual(bullets["maxItems"], 3)
         self.assertEqual(bullets["items"]["enum"], ["platform-fullstack", "platform-oauth", "platform-cicd"])
 
+    def test_selection_schema_limits_skill_groups_to_the_profile_catalog(self):
+        profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
+
+        groups = job_resume._selection_schema(profile)["properties"]["skill_groups"]["items"]
+
+        self.assertIn("anyOf", groups)
+        by_name = {item["properties"]["group"]["enum"][0]: item for item in groups["anyOf"]}
+        self.assertEqual(set(by_name), {"Languages", "Cloud"})
+        self.assertEqual(by_name["Languages"]["properties"]["skills"]["items"]["enum"], ["Go", "Python"])
+        self.assertEqual(by_name["Cloud"]["properties"]["skills"]["items"]["enum"], ["AWS", "Kubernetes"])
+
 class FakeS3:
     def __init__(self, existing_keys=None):
         self.puts = []
