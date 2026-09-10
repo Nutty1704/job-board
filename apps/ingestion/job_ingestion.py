@@ -7,7 +7,7 @@ Python standard library so the deployment ZIP has no third-party dependencies.
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from itertools import islice
 from typing import Any, Mapping
@@ -25,6 +25,7 @@ ADZUNA_URL_TEMPLATE = "https://api.adzuna.com/v1/api/jobs/{country}/search/{page
 class Config:
     country: str
     location: str
+    locations: tuple[str, ...]
     query: str
     secret_arn: str
     queue_url: str
@@ -42,13 +43,18 @@ def load_config(environment: Mapping[str, str]) -> Config:
     try:
         results_per_page = int(page_size_value)
     except (TypeError, ValueError) as error:
-        raise ValueError("ADZUNA_RESULTS_PER_PAGE must be an integer between 1 and 50") from error
-    if not 1 <= results_per_page <= 50:
-        raise ValueError("ADZUNA_RESULTS_PER_PAGE must be an integer between 1 and 50")
+        raise ValueError("ADZUNA_RESULTS_PER_PAGE must be an integer between 1 and 100") from error
+    if not 1 <= results_per_page <= 100:
+        raise ValueError("ADZUNA_RESULTS_PER_PAGE must be an integer between 1 and 100")
+
+    locations = tuple(dict.fromkeys(location.strip() for location in environment["ADZUNA_LOCATION"].split(",") if location.strip()))
+    if not locations:
+        raise ValueError("ADZUNA_LOCATION must contain at least one location")
 
     return Config(
         country=environment["ADZUNA_COUNTRY"].strip(),
-        location=environment["ADZUNA_LOCATION"].strip(),
+        location=locations[0],
+        locations=locations,
         query=environment["ADZUNA_SEARCH_QUERY"].strip(),
         secret_arn=environment["ADZUNA_SECRET_ARN"].strip(),
         queue_url=environment["JOBS_TO_SCORE_QUEUE_URL"].strip(),
@@ -173,9 +179,15 @@ def publish_events(sqs_client: Any, queue_url: str, events: list[Mapping[str, An
 def run_ingestion(environment: Mapping[str, str], secrets_client: Any, sqs_client: Any) -> dict[str, int]:
     config = load_config(environment)
     credentials = load_credentials(secrets_client, config.secret_arn)
-    results = fetch_adzuna_results(config, credentials)
     ingested_at = datetime.now(timezone.utc)
-    events = [normalize_listing(result, config, ingested_at) for result in results]
+    allocations = allocate_results(config.results_per_page, config.locations)
+    results: list[dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
+    for location in config.locations:
+        search_config = replace(config, location=location, results_per_page=allocations[location])
+        location_results = fetch_adzuna_results(search_config, credentials)
+        results.extend(location_results)
+        events.extend(normalize_listing(result, search_config, ingested_at) for result in location_results)
     published = publish_events(sqs_client, config.queue_url, events)
     LOGGER.info("Adzuna ingestion completed: fetched=%d published=%d", len(results), published)
     return {"fetched": len(results), "published": published}
@@ -205,3 +217,15 @@ def _batches(items: list[Mapping[str, Any]], size: int):
     iterator = iter(items)
     while batch := list(islice(iterator, size)):
         yield batch
+
+
+def allocate_results(total: int, locations: tuple[str, ...]) -> dict[str, int]:
+    if not locations:
+        raise ValueError("At least one location is required")
+    if total < len(locations):
+        raise ValueError("ADZUNA_RESULTS_PER_PAGE must include at least one result per location")
+    if total > len(locations) * 50:
+        raise ValueError("ADZUNA_RESULTS_PER_PAGE cannot exceed 50 results per location")
+
+    base, remainder = divmod(total, len(locations))
+    return {location: base + (index < remainder) for index, location in enumerate(locations)}

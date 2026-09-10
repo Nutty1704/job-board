@@ -53,8 +53,11 @@ Never put either credential in Terraform variables, source control, or CI
 logs. The Lambda receives the secret ARN and these non-secret environment
 variables from Terraform: `ADZUNA_COUNTRY`, `ADZUNA_LOCATION`,
 `ADZUNA_SEARCH_QUERY`, `ADZUNA_RESULTS_PER_PAGE`, and
-`JOBS_TO_SCORE_QUEUE_URL`. `adzuna_results_per_page` defaults to 50 and must
-be between 1 and 50; page one is always fetched in this MVP.
+`JOBS_TO_SCORE_QUEUE_URL`. `adzuna_location` is comma-separated and defaults to
+Sydney and Melbourne. `adzuna_results_per_page` is the total daily target,
+defaults to 75, and must be between 1 and 100. The target is split as evenly
+as possible across locations, with at most 50 results requested per location;
+page one is always fetched in this MVP.
 
 For a local deployment, upload and capture the object version before applying:
 

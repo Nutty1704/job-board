@@ -84,6 +84,34 @@ class PackagingTests(unittest.TestCase):
 
 
 class ConfigAndRequestTests(unittest.TestCase):
+    def test_load_config_parses_multiple_locations_and_daily_target(self):
+        environment = valid_config()
+        environment["ADZUNA_LOCATION"] = "Sydney, Melbourne"
+        environment["ADZUNA_RESULTS_PER_PAGE"] = "75"
+
+        config = job_ingestion.load_config(environment)
+
+        self.assertEqual(config.locations, ("Sydney", "Melbourne"))
+        self.assertEqual(config.results_per_page, 75)
+
+    def test_load_config_removes_duplicate_locations(self):
+        environment = valid_config()
+        environment["ADZUNA_LOCATION"] = "Sydney, Melbourne, Sydney"
+
+        config = job_ingestion.load_config(environment)
+
+        self.assertEqual(config.locations, ("Sydney", "Melbourne"))
+
+    def test_allocate_results_splits_daily_target_across_locations(self):
+        self.assertEqual(job_ingestion.allocate_results(75, ("Sydney", "Melbourne")), {"Sydney": 38, "Melbourne": 37})
+
+    def test_allocate_results_rejects_targets_that_cannot_be_served_per_location(self):
+        with self.assertRaisesRegex(ValueError, "50 results per location"):
+            job_ingestion.allocate_results(75, ("Sydney",))
+
+        with self.assertRaisesRegex(ValueError, "one result per location"):
+            job_ingestion.allocate_results(1, ("Sydney", "Melbourne"))
+
     def test_load_config_defaults_page_size(self):
         environment = valid_config()
         del environment["ADZUNA_RESULTS_PER_PAGE"]
@@ -164,6 +192,34 @@ class NormalizationTests(unittest.TestCase):
 
 
 class HandlerTests(unittest.TestCase):
+    def test_handler_fetches_and_publishes_daily_target_across_locations(self):
+        class Secrets:
+            def get_secret_value(self, **kwargs):
+                return {"SecretString": json.dumps({"app_id": "id", "app_key": "key"})}
+
+        class Sqs:
+            def __init__(self):
+                self.calls = []
+
+            def send_message_batch(self, **kwargs):
+                self.calls.append(kwargs)
+                return {"Successful": kwargs["Entries"]}
+
+        environment = valid_config()
+        environment["ADZUNA_LOCATION"] = "Sydney, Melbourne"
+        environment["ADZUNA_RESULTS_PER_PAGE"] = "75"
+        sqs = Sqs()
+        sydney_results = [valid_listing(id=f"sydney-{number}") for number in range(38)]
+        melbourne_results = [valid_listing(id=f"melbourne-{number}") for number in range(37)]
+
+        with patch.object(job_ingestion, "fetch_adzuna_results", side_effect=[sydney_results, melbourne_results]) as fetch:
+            result = job_ingestion.run_ingestion(environment, Secrets(), sqs)
+
+        self.assertEqual(result, {"fetched": 75, "published": 75})
+        self.assertEqual([(call.args[0].location, call.args[0].results_per_page) for call in fetch.call_args_list], [("Sydney", 38), ("Melbourne", 37)])
+        events = [json.loads(entry["MessageBody"]) for call in sqs.calls for entry in call["Entries"]]
+        self.assertEqual({event["search"]["location"] for event in events}, {"Sydney", "Melbourne"})
+
     def test_handler_fetches_and_publishes_all_results_in_batches_of_ten(self):
         class Secrets:
             def get_secret_value(self, **kwargs):

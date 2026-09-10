@@ -104,6 +104,17 @@ class ProfileValidationTests(unittest.TestCase):
         self.assertEqual(bullets["maxItems"], 3)
         self.assertEqual(bullets["items"]["enum"], ["platform-fullstack", "platform-oauth", "platform-cicd"])
 
+    def test_selection_schema_limits_skill_groups_to_the_profile_catalog(self):
+        profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
+
+        groups = job_resume._selection_schema(profile)["properties"]["skill_groups"]["items"]
+
+        self.assertIn("anyOf", groups)
+        by_name = {item["properties"]["group"]["enum"][0]: item for item in groups["anyOf"]}
+        self.assertEqual(set(by_name), {"Languages", "Cloud"})
+        self.assertEqual(by_name["Languages"]["properties"]["skills"]["items"]["enum"], ["Go", "Python"])
+        self.assertEqual(by_name["Cloud"]["properties"]["skills"]["items"]["enum"], ["AWS", "Kubernetes"])
+
 class FakeS3:
     def __init__(self, existing_keys=None):
         self.puts = []
@@ -161,6 +172,13 @@ class ConsumerTests(unittest.TestCase):
 
         self.assertEqual(consumer.process(high_match()), "duplicate")
         self.assertEqual(calls, [])
+
+    def test_manual_resume_uses_a_namespaced_artifact_key(self):
+        message = {**high_match(), "source": "manual", "source_job_id": "123e4567-e89b-12d3-a456-426614174000"}
+        consumer = self.consumer()
+
+        self.assertEqual(consumer.process(message), "completed")
+        self.assertEqual(consumer.s3.puts[0]["Key"], "resumes/manual/123e4567-e89b-12d3-a456-426614174000.docx")
 
     def test_openai_request_error_includes_response_detail(self):
         original_urlopen = job_resume.urlopen

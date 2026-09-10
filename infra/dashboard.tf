@@ -33,8 +33,9 @@ resource "aws_lambda_function" "dashboard_api" {
 
   environment {
     variables = {
-      JOB_MATCHES_TABLE   = aws_dynamodb_table.job_matches.name
-      PROJECT_DATA_BUCKET = aws_s3_bucket.project_data.bucket
+      JOB_MATCHES_TABLE         = aws_dynamodb_table.job_matches.name
+      PROJECT_DATA_BUCKET       = aws_s3_bucket.project_data.bucket
+      HIGH_MATCH_JOBS_QUEUE_URL = aws_sqs_queue.high_match_jobs.url
     }
   }
 }
@@ -74,6 +75,22 @@ resource "aws_apigatewayv2_route" "dashboard" {
 resource "aws_apigatewayv2_route" "dashboard_list" {
   api_id             = aws_apigatewayv2_api.dashboard.id
   route_key          = "GET /jobs"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.dashboard.id
+  target             = "integrations/${aws_apigatewayv2_integration.dashboard.id}"
+}
+
+resource "aws_apigatewayv2_route" "dashboard_resume_generations" {
+  api_id             = aws_apigatewayv2_api.dashboard.id
+  route_key          = "POST /resume-generations"
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.dashboard.id
+  target             = "integrations/${aws_apigatewayv2_integration.dashboard.id}"
+}
+
+resource "aws_apigatewayv2_route" "dashboard_resume_generation" {
+  api_id             = aws_apigatewayv2_api.dashboard.id
+  route_key          = "GET /resume-generations/{id}"
   authorization_type = "JWT"
   authorizer_id      = aws_apigatewayv2_authorizer.dashboard.id
   target             = "integrations/${aws_apigatewayv2_integration.dashboard.id}"
