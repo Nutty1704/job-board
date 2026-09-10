@@ -173,6 +173,41 @@ describe("ResumeGenerator", () => {
     expect(screen.queryByDisplayValue(ids[0])).toBeNull();
   });
 
+  it("stops polling a generation when a new submission evicts it from saved IDs", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem(
+      "job-board:resume-generation-ids",
+      JSON.stringify(ids.slice(0, 10)),
+    );
+    const fetch = vi.fn((path: string, options?: { method?: string }) => {
+      if (options?.method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ id: ids[10] }), { status: 202 }),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ status: "pending" }), { status: 202 }),
+      );
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    render(<ResumeGenerator onNavigateToJobs={vi.fn()} />);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(10));
+    fireEvent.change(screen.getByLabelText("Job description"), {
+      target: { value: "Build reliable payments services." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate resume" }));
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(11));
+
+    vi.advanceTimersByTime(30_000);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(21));
+    expect(
+      fetch.mock.calls.filter(
+        ([path]) => path === `/api/resume-generations/${ids[9]}`,
+      ),
+    ).toHaveLength(1);
+  });
+
   it("fetches pending IDs on mount and polls them after 30 seconds, but not completed IDs", async () => {
     vi.useFakeTimers();
     localStorage.setItem(

@@ -159,6 +159,11 @@ export function ResumeGenerator({
     ].slice(0, MAX_SAVED_IDS);
     idsRef.current = nextIds;
     saveIds(nextIds);
+    pendingIds.current = new Set(
+      [...pendingIds.current].filter((pendingId) =>
+        nextIds.includes(pendingId),
+      ),
+    );
     pendingIds.current.add(id);
     const pending: ResumeGeneration = { id, status: "pending" };
     setGenerations((current) =>
