@@ -58,6 +58,13 @@ class ProfileValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "tags"):
             job_resume.parse_resume_profile(json.dumps(value).encode())
 
+    def test_parse_profile_rejects_invalid_project_github_urls(self):
+        value = profile_data()
+        value["resume"]["projects"][0]["github_urls"] = [""]
+
+        with self.assertRaisesRegex(ValueError, "github_urls"):
+            job_resume.parse_resume_profile(json.dumps(value).encode())
+
     def test_validate_selection_rejects_invalid_source_bullet_sets(self):
         profile = job_resume.parse_resume_profile(json.dumps(profile_data()).encode())
         selection = {"summary": "Early-career software engineer.", "skill_groups": [{"group": "Languages", "skills": ["Go"]}], "experience": [{"id": "rokt", "source_bullet_ids": ["rokt-go", "rokt-k8s", "rokt-ci", "rokt-api", "rokt-data", "rokt-ops"]}, {"id": "retail", "source_bullet_ids": ["retail-team"]}], "projects": []}
@@ -201,6 +208,24 @@ class ConsumerTests(unittest.TestCase):
         rendered = Document(BytesIO(job_resume.render_docx(template.getvalue(), {"group": "Cloud & Platform"})))
 
         self.assertEqual(rendered.paragraphs[0].text, "Cloud & Platform")
+
+    @unittest.skipUnless(importlib.util.find_spec("docxtpl"), "requires DOCX rendering dependencies")
+    def test_render_docx_outputs_raw_project_github_urls_below_the_title(self):
+        from docx import Document
+
+        template = BytesIO()
+        document = Document()
+        document.add_paragraph("{%p for project in projects %}")
+        document.add_paragraph("{{ project.name }}")
+        document.add_paragraph("{%p if project.github_urls %}")
+        document.add_paragraph('GitHub: {{ project.github_urls|join(" | ") }}')
+        document.add_paragraph("{%p endif %}")
+        document.add_paragraph("{%p endfor %}")
+        document.save(template)
+
+        rendered = Document(BytesIO(job_resume.render_docx(template.getvalue(), {"projects": [{"name": "Job Board", "github_urls": ["https://github.com/Nutty1704/job-board", "https://github.com/Nutty1704/job-board-api"]}]})))
+
+        self.assertEqual([paragraph.text for paragraph in rendered.paragraphs if paragraph.text], ["Job Board", "GitHub: https://github.com/Nutty1704/job-board | https://github.com/Nutty1704/job-board-api"])
 
     def test_batch_retries_only_active_or_failed_work(self):
         response = job_resume.process_sqs_batch({"Records": [{"messageId": "active", "body": json.dumps(high_match())}]}, type("C", (), {"process": lambda self, _: "retry"})())

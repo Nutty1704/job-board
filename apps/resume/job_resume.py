@@ -70,6 +70,9 @@ def parse_resume_profile(contents: bytes) -> ResumeProfile:
         for record in projects.values():
             for key in ("name", "dates"):
                 _required_string(record, key)
+            github_urls = record.get("github_urls", [])
+            if not isinstance(github_urls, list) or not all(isinstance(url, str) and url.strip() for url in github_urls):
+                raise ValueError("github_urls")
             preference = record.get("preference", "preferred")
             if preference not in {"preferred", "fallback"}:
                 raise ValueError("project preference")
