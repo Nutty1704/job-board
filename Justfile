@@ -16,6 +16,19 @@ test-resume:
 test-dashboard-api:
     npm --prefix apps/dashboard test
 
+test-dashboard-web:
+    npm --prefix apps/dashboard run frontend-test
+
+# Start the local dashboard with its development proxy.
+dashboard-dev:
+    npm --prefix apps/dashboard run dev --workspace=@job-dashboard/web
+
+# Run dashboard API and frontend type checks and tests.
+check-dashboard:
+    npm --prefix apps/dashboard run typecheck
+    npm --prefix apps/dashboard test
+    npm --prefix apps/dashboard run build
+
 # Package the Lambda handler for upload to the versioned artifact bucket.
 package-ingestion:
     python3 -c 'from pathlib import Path; import zipfile; output = Path("dist/ingestion.zip"); output.parent.mkdir(exist_ok=True); archive = zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED); archive.write("apps/ingestion/job_ingestion.py", "job_ingestion.py"); archive.close()'
